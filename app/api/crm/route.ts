@@ -21,8 +21,14 @@ function eventType(status: string) {
   return ({ Contactado: "contacted", "Respondió": "replied", "Propuesta enviada": "proposal", "Reunión agendada": "meeting", Cerrado: "closed", "No respondió": "no_reply", "No interesado": "not_interested", Perdido: "lost" } as Record<string, string>)[status] ?? "stage_changed";
 }
 
-async function seed() {
+async function seed(includeDemo: boolean) {
   const db = getDb();
+  const existingTemplates = await db.select({ id: messageTemplates.id }).from(messageTemplates).limit(1);
+  if (!existingTemplates.length) {
+    const now = new Date().toISOString();
+    await db.insert(messageTemplates).values(defaultTemplates.map((t, i) => ({ id: `tpl_${i + 1}`, ...t, active: true, createdAt: now })));
+  }
+  if (!includeDemo) return;
   const existing = await db.select({ id: leads.id }).from(leads).limit(1);
   if (existing.length) return;
   const now = Date.now();
@@ -48,14 +54,14 @@ async function seed() {
     return rows;
   });
   await db.insert(events).values(eventRows);
-  await db.insert(messageTemplates).values(defaultTemplates.map((t, i) => ({ id: `tpl_${i + 1}`, ...t, active: true, createdAt: days(0) })));
 }
 
 export async function GET(request: Request) {
   const actor = actorFrom(request);
   if (!actor) return Response.json({ error: "No autorizado" }, { status: 401 });
   try {
-    await seed();
+    const host = new URL(request.url).hostname;
+    await seed(host === "localhost" || host === "127.0.0.1");
     const db = getDb();
     const [leadRows, eventRows, templateRows] = await Promise.all([
       db.select().from(leads).orderBy(desc(leads.updatedAt)),
