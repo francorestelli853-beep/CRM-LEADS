@@ -66,6 +66,7 @@ const defaultTemplates = [
   { id: "tpl_3", name: "Seguimiento sin respuesta", channel: "WhatsApp", stage: "No respondi\u00f3", body: "Hola, retomo este mensaje por si se te pas\u00f3. Tengo una idea concreta para simplificar parte de la operaci\u00f3n de {{negocio}}. Si te sirve, te la resumo en dos minutos por ac\u00e1." },
   { id: "tpl_4", name: "Env\u00edo de propuesta", channel: "Email", stage: "Propuesta enviada", body: "Hola, te comparto la propuesta que conversamos. Resume el alcance, los tiempos y el impacto esperado. Si te parece, coordinamos una llamada breve para revisar dudas y pr\u00f3ximos pasos." },
 ];
+const responsibleOwners = ["Franco", "Trezza", "Laucha"];
 
 function env(name: string) {
   return process.env[name]?.trim() ?? "";
@@ -120,6 +121,14 @@ function cleanStatus(value: unknown): LeadStatus {
     perdido: "Perdido",
   };
   return statuses[normalized] ?? "Pendiente";
+}
+
+function cleanOwner(value: unknown, fallback: string) {
+  const raw = String(value ?? "").trim();
+  const normalized = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const matched = responsibleOwners.find((owner) => owner.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normalized);
+  if (matched) return matched;
+  return responsibleOwners.includes(fallback) ? fallback : responsibleOwners[0];
 }
 
 function eventType(status: string) {
@@ -198,7 +207,7 @@ function toLead(input: LeadInput, actor: string, source: "Manual" | "Excel", now
     email,
     phone,
     segment: String(input.segment ?? "General").trim() || "General",
-    owner: String(input.owner ?? actor).trim() || actor,
+    owner: cleanOwner(input.owner, actor),
     status: cleanStatus(input.status),
     priority: String(input.priority ?? "Media").trim() || "Media",
     batch: String(input.batch ?? "").trim(),
