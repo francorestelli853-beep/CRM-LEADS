@@ -14,7 +14,7 @@ export default async function Home() {
     return (
       <main className="login-shell">
         <section className="login-card">
-          <div className="brand-mark" aria-hidden="true"><span>S</span></div>
+          <div className="brand-mark" aria-hidden="true"><span className="logo-node light"/><span className="logo-bridge"/><span className="logo-node clay"/></div>
           <p className="eyebrow">Sincro AI · CRM Comercial</p>
           <h1>Tu operación comercial, sincronizada.</h1>
           <p>Ingresá para acceder a la base compartida, el pipeline y las métricas del equipo.</p>

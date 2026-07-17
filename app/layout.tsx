@@ -10,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
   const host = h.get("host") ?? "localhost:3000";
   const protocol = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-  const imageUrl = `${protocol}://${host}/og.png`;
+  const imageUrl = `${protocol}://${host}/og-v2.png`;
   const title = "Sincro CRM | Pipeline comercial";
   const description = "Base comercial compartida, pipeline y métricas de conversión para el equipo de Sincro AI.";
   return {

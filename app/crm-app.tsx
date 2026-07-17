@@ -11,7 +11,7 @@ type Page = "resumen" | "pipeline" | "contactos" | "importar" | "mensajes";
 const stages = ["Pendiente", "Contactado", "Respondió", "Propuesta enviada", "Reunión agendada", "Cerrado", "No respondió", "No interesado", "Perdido"];
 const pipelineStages = stages.slice(0, 6);
 const stageMeta: Record<string, { color: string; tint: string }> = {
-  Pendiente: { color: "#718096", tint: "#eef1f5" }, Contactado: { color: "#3182ce", tint: "#eaf4ff" }, "Respondió": { color: "#7b61d1", tint: "#f1edff" }, "Propuesta enviada": { color: "#dd7c18", tint: "#fff3df" }, "Reunión agendada": { color: "#0f9f87", tint: "#e4f8f3" }, Cerrado: { color: "#4e930f", tint: "#edf8df" }, "No respondió": { color: "#8a6d4a", tint: "#f7f1e9" }, "No interesado": { color: "#d64d57", tint: "#ffecee" }, Perdido: { color: "#b43642", tint: "#fde9eb" },
+  Pendiente: { color: "#6E7682", tint: "#ECECE7" }, Contactado: { color: "#2C7E96", tint: "#E5EFF1" }, "Respondió": { color: "#0A2540", tint: "#E6EBF0" }, "Propuesta enviada": { color: "#C25A12", tint: "#F6DCC6" }, "Reunión agendada": { color: "#287665", tint: "#E3F1ED" }, Cerrado: { color: "#2E7D32", tint: "#E5F2E4" }, "No respondió": { color: "#8A6D4A", tint: "#F2ECE4" }, "No interesado": { color: "#B44742", tint: "#F8E8E6" }, Perdido: { color: "#8C3338", tint: "#F5E5E6" },
 };
 const nav = [
   { id: "resumen" as Page, label: "Resumen", icon: LayoutDashboard }, { id: "pipeline" as Page, label: "Pipeline", icon: TrendingUp }, { id: "contactos" as Page, label: "Prospectos", icon: Users }, { id: "importar" as Page, label: "Importar Excel", icon: FileSpreadsheet }, { id: "mensajes" as Page, label: "Mensajes", icon: MessageSquareText },
@@ -61,7 +61,7 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
-        <div className="sidebar-brand"><div className="brand-mark small"><span>S</span></div><div><strong>Sincro</strong><small>CRM comercial</small></div><button className="icon-button close-menu" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={18}/></button></div>
+        <div className="sidebar-brand"><div className="brand-mark small" aria-hidden="true"><span className="logo-node light"/><span className="logo-bridge"/><span className="logo-node clay"/></div><div><div className="brand-wordmark"><strong>Sincro</strong><b>CRM</b></div><small>Pipeline comercial</small></div><button className="icon-button close-menu" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={18}/></button></div>
         <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? "active" : ""} onClick={() => { setPage(id); setMenuOpen(false); }}><Icon size={18}/><span>{label}</span>{id === "contactos" && <em>{data.leads.length}</em>}</button>)}</nav>
         <div className="sidebar-insight"><Sparkles size={18}/><strong>Objetivo semanal</strong><p>100 contactos por día</p><div className="mini-progress"><span style={{ width: "68%" }}/></div><small>340 de 500 contactos</small></div>
         <div className="sidebar-footer"><div className="avatar">{initials(currentUser)}</div><div><strong>{currentUser.split(" · ")[0]}</strong><small>Equipo Sincro AI</small></div><MoreHorizontal size={18}/></div>
@@ -94,7 +94,7 @@ function Dashboard({ leads, events, period, setPeriod, setPage }: { leads: Lead[
     { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: "+12%" }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, counts.contacted)}% tasa` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, counts.contacted)}% del total` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, counts.proposal)}% de propuestas` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, counts.contacted)}% cierre` },
   ];
   const funnel = [
-    ["Contactados", counts.contacted, 100, "#4da8ff"], ["Respondieron", counts.replied, safeRate(counts.replied, counts.contacted), "#8767df"], ["Propuesta enviada", counts.proposal, safeRate(counts.proposal, counts.contacted), "#f1a33a"], ["Reunión agendada", counts.meeting, safeRate(counts.meeting, counts.contacted), "#24b59e"], ["Cliente cerrado", counts.closed, safeRate(counts.closed, counts.contacted), "#77b82a"],
+    ["Contactados", counts.contacted, 100, "#0A2540"], ["Respondieron", counts.replied, safeRate(counts.replied, counts.contacted), "#2C7E96"], ["Propuesta enviada", counts.proposal, safeRate(counts.proposal, counts.contacted), "#E9761D"], ["Reunión agendada", counts.meeting, safeRate(counts.meeting, counts.contacted), "#287665"], ["Cliente cerrado", counts.closed, safeRate(counts.closed, counts.contacted), "#2E7D32"],
   ] as const;
   const activity = events.slice(0, 5);
   const leadById = new Map(leads.map((l) => [l.id, l]));
