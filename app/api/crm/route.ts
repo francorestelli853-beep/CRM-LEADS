@@ -293,6 +293,22 @@ export async function POST(request: Request) {
       return Response.json({ lead: fromLead(updated), event: fromEvent(createdEvent) });
     }
 
+    if (payload.action === "deleteLead") {
+      const leadId = String(payload.leadId ?? "");
+      if (!leadId) return Response.json({ error: "Prospecto no encontrado" }, { status: 404 });
+      const eventParams = new URLSearchParams({ lead_id: `eq.${leadId}` });
+      await supabase(`events?${eventParams.toString()}`, {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+      });
+      const leadParams = new URLSearchParams({ id: `eq.${leadId}` });
+      await supabase(`leads?${leadParams.toString()}`, {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+      });
+      return Response.json({ ok: true });
+    }
+
     if (payload.action === "import") {
       const incoming = Array.isArray(payload.leads) ? payload.leads.slice(0, 2000) : [];
       const existing = await supabase<Array<{ email: string; phone: string }>>("leads?select=email,phone");

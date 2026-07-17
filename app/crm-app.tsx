@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowDown, ArrowUp, BarChart3, BriefcaseBusiness, CalendarClock, Check, ChevronDown, CircleDollarSign, Clipboard, Clock3, Copy, Download, FileSpreadsheet, Filter, LayoutDashboard, LoaderCircle, Mail, Menu, MessageSquareText, MoreHorizontal, Phone, Plus, Search, Settings, Sparkles, Target, TrendingUp, Upload, UserRound, Users, X } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, BarChart3, BriefcaseBusiness, CalendarClock, Check, ChevronDown, CircleDollarSign, Clipboard, Clock3, Copy, Download, FileSpreadsheet, Filter, LayoutDashboard, LoaderCircle, Mail, Menu, MessageSquareText, MoreHorizontal, Phone, Plus, Search, Settings, Sparkles, Target, Trash2, TrendingUp, Upload, UserRound, Users, X } from "lucide-react";
 
 type Lead = { id: string; businessName: string; email: string; phone: string; segment: string; owner: string; status: string; priority: string; batch: string; notes: string; nextFollowUp: string | null; source: string; createdAt: string; updatedAt: string };
 type Event = { id: string; leadId: string; type: string; fromStatus: string | null; toStatus: string | null; actor: string; note: string; createdAt: string };
@@ -55,8 +55,25 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
     const lead = data.leads.find((l) => l.id === leadId);
     if (!lead || lead.status === status) return;
     setData((d) => ({ ...d, leads: d.leads.map((l) => l.id === leadId ? { ...l, status, updatedAt: now } : l), events: [{ id: `temp_${Date.now()}`, leadId, type: ({ Contactado: "contacted", "Respondió": "replied", "Propuesta enviada": "proposal", "Reunión agendada": "meeting", Cerrado: "closed" } as Record<string,string>)[status] ?? "stage_changed", fromStatus: lead.status, toStatus: status, actor: currentUser, note: "", createdAt: now }, ...d.events] }));
-    try { await api({ action: "updateStage", leadId, status }); }
+    try {
+      const saved = await api({ action: "updateStage", leadId, status });
+      setData((d) => ({
+        ...d,
+        leads: d.leads.map((l) => l.id === leadId ? saved.lead : l),
+        events: saved.event ? [saved.event, ...d.events.filter((e) => !e.id.startsWith("temp_"))] : d.events.filter((e) => !e.id.startsWith("temp_")),
+      }));
+    }
     catch (e) { setData(original); setError(e instanceof Error ? e.message : "No se pudo actualizar"); }
+  }
+
+  async function deleteLead(leadId: string) {
+    const lead = data.leads.find((l) => l.id === leadId);
+    if (!lead) return;
+    if (!window.confirm(`Eliminar "${lead.businessName}" del CRM? Esta accion no se puede deshacer.`)) return;
+    const original = data;
+    setData((d) => ({ ...d, leads: d.leads.filter((l) => l.id !== leadId), events: d.events.filter((e) => e.leadId !== leadId) }));
+    try { await api({ action: "deleteLead", leadId }); }
+    catch (e) { setData(original); setError(e instanceof Error ? e.message : "No se pudo eliminar"); }
   }
 
   return (
@@ -74,7 +91,7 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
         {loading ? <Loading/> : <>
           {page === "resumen" && <Dashboard leads={data.leads} events={data.events} period={period} setPeriod={setPeriod} setPage={setPage}/>} 
           {page === "pipeline" && <Pipeline leads={data.leads} moveLead={moveLead}/>} 
-          {page === "contactos" && <Contacts leads={data.leads} moveLead={moveLead} onAdd={() => setAddOpen(true)}/>} 
+          {page === "contactos" && <Contacts leads={data.leads} moveLead={moveLead} deleteLead={deleteLead} onAdd={() => setAddOpen(true)}/>} 
           {page === "importar" && <Importer api={api} refresh={refresh}/>} 
           {page === "mensajes" && <Messages templates={data.templates} api={api} refresh={refresh}/>} 
         </>}
@@ -89,25 +106,38 @@ function Loading() { return <div className="loading"><LoaderCircle className="sp
 function Dashboard({ leads, events, period, setPeriod, setPage }: { leads: Lead[]; events: Event[]; period: string; setPeriod: (p: "hoy"|"semana"|"mes") => void; setPage: (p: Page) => void }) {
   const cutoff = Date.now() - (period === "hoy" ? 86400000 : period === "semana" ? 7 * 86400000 : 30 * 86400000);
   const filtered = events.filter((e) => new Date(e.createdAt).getTime() >= cutoff);
-  const counts = { contacted: filtered.filter((e) => e.type === "contacted").length, replied: filtered.filter((e) => e.type === "replied").length, proposal: filtered.filter((e) => e.type === "proposal").length, meeting: filtered.filter((e) => e.type === "meeting").length, closed: filtered.filter((e) => e.type === "closed").length };
   const safeRate = (n: number, d: number) => d ? Math.round(n / d * 100) : 0;
+  const totalLeads = leads.length;
+  const normalizedStatus = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const hasStatus = (lead: Lead, values: string[]) => values.map(normalizedStatus).includes(normalizedStatus(lead.status));
+  const counts = {
+    contacted: leads.filter((l) => !hasStatus(l, ["Pendiente"])).length,
+    replied: leads.filter((l) => hasStatus(l, ["Respondió", "No interesado", "Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
+    proposal: leads.filter((l) => hasStatus(l, ["Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
+    meeting: leads.filter((l) => hasStatus(l, ["Reunión agendada", "Cerrado"])).length,
+    closed: leads.filter((l) => hasStatus(l, ["Cerrado"])).length,
+  };
   const cards = [
-    { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: "+12%" }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, counts.contacted)}% tasa` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, counts.contacted)}% del total` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, counts.proposal)}% de propuestas` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, counts.contacted)}% cierre` },
+    { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: `${safeRate(counts.contacted, totalLeads)}% del total` }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, totalLeads)}% del total` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, totalLeads)}% del total` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, totalLeads)}% del total` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, totalLeads)}% del total` },
   ];
-  const funnel = [
-    ["Contactados", counts.contacted, 100, "#0A2540"], ["Respondieron", counts.replied, safeRate(counts.replied, counts.contacted), "#2C7E96"], ["Propuesta enviada", counts.proposal, safeRate(counts.proposal, counts.contacted), "#E9761D"], ["Reunión agendada", counts.meeting, safeRate(counts.meeting, counts.contacted), "#287665"], ["Cliente cerrado", counts.closed, safeRate(counts.closed, counts.contacted), "#2E7D32"],
+  const funnelMetrics = [
+    ["Contactados", counts.contacted, safeRate(counts.contacted, totalLeads), "#0A2540"],
+    ["Respondieron", counts.replied, safeRate(counts.replied, totalLeads), "#2C7E96"],
+    ["Propuesta enviada", counts.proposal, safeRate(counts.proposal, totalLeads), "#E9761D"],
+    ["Reunión agendada", counts.meeting, safeRate(counts.meeting, totalLeads), "#287665"],
+    ["Cliente cerrado", counts.closed, safeRate(counts.closed, totalLeads), "#2E7D32"],
   ] as const;
   const activity = events.slice(0, 5);
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const team = [...new Set(leads.map((l) => l.owner))].slice(0, 3).map((owner) => ({ owner, contacts: filtered.filter((e) => e.actor === owner && e.type === "contacted").length, proposals: filtered.filter((e) => e.actor === owner && e.type === "proposal").length, closed: filtered.filter((e) => e.actor === owner && e.type === "closed").length }));
-  const topBlock = funnel.slice(1).reduce((prev, curr) => curr[2] < prev[2] ? curr : prev, funnel[1]);
+  const topBlock = funnelMetrics.slice(1).reduce((prev, curr) => curr[2] < prev[2] ? curr : prev, funnelMetrics[1]);
 
   return <div className="page-content">
     <div className="page-heading"><div><p className="eyebrow">Centro de control</p><h1>Buen día, equipo <span>👋</span></h1><p>Así viene el rendimiento comercial de Sincro.</p></div><div className="period-control">{(["hoy","semana","mes"] as const).map((p) => <button key={p} className={period === p ? "active" : ""} onClick={() => setPeriod(p)}>{p === "hoy" ? "Hoy" : p === "semana" ? "7 días" : "30 días"}</button>)}</div></div>
     <section className="metric-grid">{cards.map(({ label, value, icon: Icon, color, delta }) => <article className="metric-card" key={label}><div className={`metric-icon ${color}`}><Icon size={19}/></div><div className="metric-copy"><small>{label}</small><strong>{value}</strong><span className={delta.startsWith("+") ? "positive" : ""}>{delta.startsWith("+") && <ArrowUp size={12}/>} {delta}</span></div></article>)}</section>
     <section className="dashboard-grid">
-      <article className="panel funnel-panel"><div className="panel-heading"><div><h2>Embudo de conversión</h2><p>Conversión sobre contactos realizados</p></div><button className="text-button" onClick={() => setPage("pipeline")}>Ver pipeline <ArrowDown size={14}/></button></div><div className="funnel">{funnel.map(([label, value, rate, color], index) => <div className="funnel-row" key={label}><div className="funnel-label"><span>{label}</span><strong>{value}</strong></div><div className="funnel-track"><div style={{ width: `${Math.max(rate, value ? 6 : 0)}%`, background: color }}><span>{rate}%</span></div></div>{index < funnel.length - 1 && <div className="stage-rate">{safeRate(funnel[index+1][1], value)}% pasa a la siguiente etapa</div>}</div>)}</div></article>
-      <article className="panel insight-panel"><div className="insight-icon"><Target size={21}/></div><p className="eyebrow">Lectura del embudo</p><h2>La mayor oportunidad está en<br/><span>{topBlock[0]}</span></h2><p>Esta etapa concentra la caída más fuerte del período. Revisar el mensaje o material usado acá puede mejorar todo el cierre.</p><div className="insight-stat"><strong>{counts.contacted ? Math.max(1, Math.round(counts.contacted / Math.max(counts.closed, 1))) : 0}</strong><span>contactos por cada<br/>cliente cerrado</span></div><button onClick={() => setPage("mensajes")}>Revisar mensajes <ArrowDown size={14}/></button></article>
+      <article className="panel funnel-panel"><div className="panel-heading"><div><h2>Embudo de conversión</h2><p>Conversión sobre total de prospectos</p></div><button className="text-button" onClick={() => setPage("pipeline")}>Ver pipeline <ArrowDown size={14}/></button></div><div className="funnel">{funnelMetrics.map(([label, value, rate, color]) => <div className="funnel-row" key={label}><div className="funnel-label"><span>{label}</span><strong>{value}</strong></div><div className="funnel-track"><div style={{ width: `${Math.max(rate, value ? 6 : 0)}%`, background: color }}><span>{rate}%</span></div></div><div className="stage-rate">{value} de {totalLeads} prospectos</div></div>)}</div></article>
+      <article className="panel insight-panel"><div className="insight-icon"><Target size={21}/></div><p className="eyebrow">Lectura del embudo</p><h2>La mayor oportunidad está en<br/><span>{topBlock[0]}</span></h2><p>Esta etapa concentra la caída más fuerte del período. Revisar el mensaje o material usado acá puede mejorar todo el cierre.</p><div className="insight-stat"><strong>{totalLeads ? Math.max(1, Math.round(totalLeads / Math.max(counts.closed, 1))) : 0}</strong><span>prospectos por cada<br/>cliente cerrado</span></div><button onClick={() => setPage("mensajes")}>Revisar mensajes <ArrowDown size={14}/></button></article>
       <article className="panel activity-panel"><div className="panel-heading"><div><h2>Actividad reciente</h2><p>Últimos movimientos del equipo</p></div><Activity size={18}/></div><div className="activity-list">{activity.map((event) => { const lead = leadById.get(event.leadId); return <div className="activity-item" key={event.id}><div className="avatar mini">{initials(event.actor)}</div><div><p><strong>{event.actor.split("@")[0]}</strong> {eventLabels[event.type] ?? "actualizó a"} <b>{lead?.businessName ?? "un prospecto"}</b></p><small>{relativeTime(event.createdAt)}</small></div><span className="activity-dot" style={{ background: stageMeta[event.toStatus ?? "Pendiente"]?.color }}/></div>; })}</div></article>
       <article className="panel team-panel"><div className="panel-heading"><div><h2>Rendimiento del equipo</h2><p>Actividad en el período</p></div><Users size={18}/></div><div className="team-table"><div className="team-row header"><span>Responsable</span><span>Contactos</span><span>Propuestas</span><span>Cierres</span></div>{team.map((m) => <div className="team-row" key={m.owner}><span><div className="avatar tiny">{initials(m.owner)}</div>{m.owner}</span><strong>{m.contacts}</strong><strong>{m.proposals}</strong><strong>{m.closed}</strong></div>)}</div></article>
     </section>
@@ -122,11 +152,11 @@ function Pipeline({ leads, moveLead }: { leads: Lead[]; moveLead: (id:string,sta
   return <div className="page-content wide"><div className="page-heading"><div><p className="eyebrow">Flujo comercial</p><h1>Pipeline</h1><p>Mové cada oportunidad a medida que avanza.</p></div><label className="select-wrap"><Filter size={15}/><select value={filter} onChange={(e)=>setFilter(e.target.value)}>{owners.map((o)=><option key={o}>{o}</option>)}</select><ChevronDown size={14}/></label></div><div className="pipeline-board">{pipelineStages.map((stage) => { const stageLeads = visible.filter((l) => l.status === stage); return <section className="pipeline-column" key={stage} onDragOver={(e)=>e.preventDefault()} onDrop={()=>{ if(dragging) void moveLead(dragging,stage); setDragging(null); }}><header><div><span className="stage-dot" style={{background:stageMeta[stage].color}}/><strong>{stage}</strong></div><em>{stageLeads.length}</em></header><div className="pipeline-cards">{stageLeads.map((lead)=><article className="lead-card" draggable onDragStart={()=>setDragging(lead.id)} onDragEnd={()=>setDragging(null)} key={lead.id}><div className="lead-card-top"><span className={`priority ${lead.priority.toLowerCase()}`}>{lead.priority}</span><MoreHorizontal size={16}/></div><h3>{lead.businessName}</h3><p>{lead.segment}</p><div className="lead-contact">{lead.email ? <Mail size={14}/> : <Phone size={14}/>}<span>{lead.email || formatPhone(lead.phone)}</span></div><footer><div className="avatar tiny">{initials(lead.owner)}</div><span>{lead.owner}</span><small>{relativeTime(lead.updatedAt)}</small></footer><select aria-label={`Estado de ${lead.businessName}`} value={lead.status} onChange={(e)=>void moveLead(lead.id,e.target.value)}>{stages.map((s)=><option key={s}>{s}</option>)}</select></article>)}</div></section>; })}</div></div>;
 }
 
-function Contacts({ leads, moveLead, onAdd }: { leads: Lead[]; moveLead:(id:string,status:string)=>void; onAdd:()=>void }) {
+function Contacts({ leads, moveLead, deleteLead, onAdd }: { leads: Lead[]; moveLead:(id:string,status:string)=>void; deleteLead:(id:string)=>void; onAdd:()=>void }) {
   const [search, setSearch] = useState(""); const [status, setStatus] = useState("Todos");
   useEffect(()=>{ const q=sessionStorage.getItem("crm-search"); if(q){setSearch(q); sessionStorage.removeItem("crm-search");}},[]);
   const filtered = leads.filter((l) => (status === "Todos" || l.status === status) && `${l.businessName} ${l.email} ${l.phone} ${l.segment}`.toLowerCase().includes(search.toLowerCase()));
-  return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Base compartida</p><h1>Prospectos</h1><p>{leads.length} registros disponibles para todo el equipo.</p></div><button className="primary-button" onClick={onAdd}><Plus size={17}/> Nuevo prospecto</button></div><section className="panel contacts-panel"><div className="table-toolbar"><label className="table-search"><Search size={17}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label><label className="select-wrap"><Filter size={15}/><select value={status} onChange={(e)=>setStatus(e.target.value)}><option>Todos</option>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label><button className="secondary-button" onClick={()=>downloadCsv(filtered)}><Download size={16}/> Exportar CSV</button></div><div className="table-scroll"><table><thead><tr><th>Negocio</th><th>Contacto</th><th>Rubro</th><th>Responsable</th><th>Estado</th><th>Última actividad</th></tr></thead><tbody>{filtered.map((lead)=><tr key={lead.id}><td><strong>{lead.businessName}</strong><small>{lead.source} · {lead.batch || "Sin tanda"}</small></td><td><span>{lead.email || "—"}</span><small>{lead.phone ? formatPhone(lead.phone) : ""}</small></td><td>{lead.segment}</td><td><span className="owner-cell"><div className="avatar tiny">{initials(lead.owner)}</div>{lead.owner}</span></td><td><label className="status-select" style={{background:stageMeta[lead.status]?.tint,color:stageMeta[lead.status]?.color}}><span className="stage-dot" style={{background:stageMeta[lead.status]?.color}}/><select value={lead.status} onChange={(e)=>void moveLead(lead.id,e.target.value)}>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={13}/></label></td><td>{relativeTime(lead.updatedAt)}</td></tr>)}</tbody></table></div>{!filtered.length&&<div className="empty-state"><Search/><h3>No encontramos prospectos</h3><p>Probá cambiando los filtros o cargá uno nuevo.</p></div>}</section></div>;
+  return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Base compartida</p><h1>Prospectos</h1><p>{leads.length} registros disponibles para todo el equipo.</p></div><button className="primary-button" onClick={onAdd}><Plus size={17}/> Nuevo prospecto</button></div><section className="panel contacts-panel"><div className="table-toolbar"><label className="table-search"><Search size={17}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label><label className="select-wrap"><Filter size={15}/><select value={status} onChange={(e)=>setStatus(e.target.value)}><option>Todos</option>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label><button className="secondary-button" onClick={()=>downloadCsv(filtered)}><Download size={16}/> Exportar CSV</button></div><div className="table-scroll"><table><thead><tr><th>Negocio</th><th>Contacto</th><th>Rubro</th><th>Responsable</th><th>Estado</th><th>Última actividad</th><th>Acciones</th></tr></thead><tbody>{filtered.map((lead)=><tr key={lead.id}><td><strong>{lead.businessName}</strong><small>{lead.source} · {lead.batch || "Sin tanda"}</small></td><td><span>{lead.email || "—"}</span><small>{lead.phone ? formatPhone(lead.phone) : ""}</small></td><td>{lead.segment}</td><td><span className="owner-cell"><div className="avatar tiny">{initials(lead.owner)}</div>{lead.owner}</span></td><td><label className="status-select" style={{background:stageMeta[lead.status]?.tint,color:stageMeta[lead.status]?.color}}><span className="stage-dot" style={{background:stageMeta[lead.status]?.color}}/><select value={lead.status} onChange={(e)=>void moveLead(lead.id,e.target.value)}>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={13}/></label></td><td>{relativeTime(lead.updatedAt)}</td><td><button className="icon-button row-delete" onClick={() => void deleteLead(lead.id)} aria-label={`Eliminar ${lead.businessName}`} title="Eliminar prospecto"><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>{!filtered.length&&<div className="empty-state"><Search/><h3>No encontramos prospectos</h3><p>Probá cambiando los filtros o cargá uno nuevo.</p></div>}</section></div>;
 }
 
 function Importer({ api, refresh }: { api:(p:Record<string,unknown>)=>Promise<any>; refresh:()=>Promise<void> }) {
