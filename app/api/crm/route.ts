@@ -293,6 +293,19 @@ export async function POST(request: Request) {
       return Response.json({ lead: fromLead(updated), event: fromEvent(createdEvent) });
     }
 
+    if (payload.action === "updateOwner") {
+      const leadIds = Array.isArray(payload.leadIds) ? payload.leadIds.map(String).filter(Boolean).slice(0, 500) : [];
+      const owner = cleanOwner(payload.owner, actor);
+      if (!leadIds.length) return Response.json({ error: "Selecciona al menos un prospecto." }, { status: 400 });
+      const params = new URLSearchParams({ id: `in.(${leadIds.join(",")})` });
+      const updated = await supabase<DbLead[]>(`leads?${params.toString()}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ owner, updated_at: now }),
+      });
+      return Response.json({ leads: updated.map(fromLead) });
+    }
+
     if (payload.action === "deleteLead") {
       const leadId = String(payload.leadId ?? "");
       if (!leadId) return Response.json({ error: "Prospecto no encontrado" }, { status: 404 });
