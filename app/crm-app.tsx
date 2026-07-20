@@ -20,6 +20,26 @@ const nav = [
 const eventLabels: Record<string, string> = { contacted: "contactó a", replied: "registró respuesta de", proposal: "envió propuesta a", meeting: "agendó reunión con", closed: "cerró a", created: "cargó a", no_reply: "marcó sin respuesta a", stage_changed: "actualizó a" };
 
 const fallbackData = { leads: [] as Lead[], events: [] as Event[], templates: [] as Template[] };
+const dailyContactTarget = 100;
+const weeklyContactTarget = 500;
+const dayMs = 86400000;
+
+function normalizedStatus(value: string | null | undefined) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function isStatus(value: string | null | undefined, status: string) {
+  return normalizedStatus(value) === normalizedStatus(status);
+}
+
+function movedBetween(event: Event, from: string, to: string) {
+  return isStatus(event.fromStatus, from) && isStatus(event.toStatus, to);
+}
+
+function reachedStatus(lead: Lead, values: string[]) {
+  const current = normalizedStatus(lead.status);
+  return values.map(normalizedStatus).includes(current);
+}
 
 export default function CrmApp({ currentUser }: { currentUser: string }) {
   const [page, setPage] = useState<Page>("resumen");
@@ -87,12 +107,20 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
     } catch (e) { setData(original); setError(e instanceof Error ? e.message : "No se pudo reasignar"); }
   }
 
+  const contactGoal = useMemo(() => {
+    const now = Date.now();
+    const contactMoves = data.events.filter((event) => movedBetween(event, "Pendiente", "Contactado"));
+    const today = contactMoves.filter((event) => new Date(event.createdAt).getTime() >= now - dayMs).length;
+    const week = contactMoves.filter((event) => new Date(event.createdAt).getTime() >= now - 7 * dayMs).length;
+    return { today, week, progress: Math.min(100, Math.round((week / weeklyContactTarget) * 100)) };
+  }, [data.events]);
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <div className="sidebar-brand"><div className="brand-mark small" aria-hidden="true"><span className="logo-node light"/><span className="logo-bridge"/><span className="logo-node clay"/></div><div><div className="brand-wordmark"><strong>Sincro</strong><b>CRM</b></div><small>Pipeline comercial</small></div><button className="icon-button close-menu" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={18}/></button></div>
         <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? "active" : ""} onClick={() => { setPage(id); setMenuOpen(false); }}><Icon size={18}/><span>{label}</span>{id === "contactos" && <em>{data.leads.length}</em>}</button>)}</nav>
-        <div className="sidebar-insight"><Sparkles size={18}/><strong>Objetivo semanal</strong><p>100 contactos por día</p><div className="mini-progress"><span style={{ width: "68%" }}/></div><small>340 de 500 contactos</small></div>
+        <div className="sidebar-insight"><Sparkles size={18}/><strong>Objetivo semanal</strong><p>{contactGoal.today} contactados hoy · meta {dailyContactTarget}</p><div className="mini-progress"><span style={{ width: `${contactGoal.progress}%` }}/></div><small>{contactGoal.week} de {weeklyContactTarget} contactos</small></div>
         <div className="sidebar-footer"><div className="avatar">{initials(currentUser)}</div><div><strong>{currentUser.split(" · ")[0]}</strong><small>Equipo Sincro AI</small></div><MoreHorizontal size={18}/></div>
       </aside>
 
@@ -115,40 +143,45 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
 function Loading() { return <div className="loading"><LoaderCircle className="spin"/><p>Sincronizando la operación comercial...</p></div>; }
 
 function Dashboard({ leads, events, period, setPeriod, setPage }: { leads: Lead[]; events: Event[]; period: string; setPeriod: (p: "hoy"|"semana"|"mes") => void; setPage: (p: Page) => void }) {
-  const cutoff = Date.now() - (period === "hoy" ? 86400000 : period === "semana" ? 7 * 86400000 : 30 * 86400000);
+  const cutoff = Date.now() - (period === "hoy" ? dayMs : period === "semana" ? 7 * dayMs : 30 * dayMs);
   const filtered = events.filter((e) => new Date(e.createdAt).getTime() >= cutoff);
   const safeRate = (n: number, d: number) => d ? Math.round(n / d * 100) : 0;
   const totalLeads = leads.length;
-  const normalizedStatus = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const hasStatus = (lead: Lead, values: string[]) => values.map(normalizedStatus).includes(normalizedStatus(lead.status));
   const counts = {
-    contacted: leads.filter((l) => !hasStatus(l, ["Pendiente"])).length,
-    replied: leads.filter((l) => hasStatus(l, ["Respondió", "No interesado", "Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
-    proposal: leads.filter((l) => hasStatus(l, ["Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
-    meeting: leads.filter((l) => hasStatus(l, ["Reunión agendada", "Cerrado"])).length,
-    closed: leads.filter((l) => hasStatus(l, ["Cerrado"])).length,
+    contacted: leads.filter((l) => !reachedStatus(l, ["Pendiente"])).length,
+    replied: leads.filter((l) => reachedStatus(l, ["Respondió", "No interesado", "Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
+    proposal: leads.filter((l) => reachedStatus(l, ["Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
+    meeting: leads.filter((l) => reachedStatus(l, ["Reunión agendada", "Cerrado"])).length,
+    closed: leads.filter((l) => reachedStatus(l, ["Cerrado"])).length,
+  };
+  const bases = {
+    contacted: totalLeads,
+    replied: counts.contacted,
+    proposal: counts.replied,
+    meeting: counts.proposal,
+    closed: counts.meeting,
   };
   const cards = [
-    { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: `${safeRate(counts.contacted, totalLeads)}% del total` }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, totalLeads)}% del total` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, totalLeads)}% del total` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, totalLeads)}% del total` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, totalLeads)}% del total` },
+    { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: `${safeRate(counts.contacted, bases.contacted)}% del total` }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, bases.replied)}% de contactados` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, bases.proposal)}% de respuestas` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, bases.meeting)}% de propuestas` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, bases.closed)}% de reuniones` },
   ];
   const funnelMetrics = [
-    ["Contactados", counts.contacted, safeRate(counts.contacted, totalLeads), "#0A2540"],
-    ["Respondieron", counts.replied, safeRate(counts.replied, totalLeads), "#2C7E96"],
-    ["Propuesta enviada", counts.proposal, safeRate(counts.proposal, totalLeads), "#E9761D"],
-    ["Reunión agendada", counts.meeting, safeRate(counts.meeting, totalLeads), "#287665"],
-    ["Cliente cerrado", counts.closed, safeRate(counts.closed, totalLeads), "#2E7D32"],
+    { label: "Contactados", value: counts.contacted, rate: safeRate(counts.contacted, bases.contacted), base: bases.contacted, color: "#0A2540" },
+    { label: "Respondieron", value: counts.replied, rate: safeRate(counts.replied, bases.replied), base: bases.replied, color: "#2C7E96" },
+    { label: "Propuesta enviada", value: counts.proposal, rate: safeRate(counts.proposal, bases.proposal), base: bases.proposal, color: "#E9761D" },
+    { label: "Reunión agendada", value: counts.meeting, rate: safeRate(counts.meeting, bases.meeting), base: bases.meeting, color: "#287665" },
+    { label: "Cliente cerrado", value: counts.closed, rate: safeRate(counts.closed, bases.closed), base: bases.closed, color: "#2E7D32" },
   ] as const;
   const activity = events.slice(0, 5);
   const leadById = new Map(leads.map((l) => [l.id, l]));
-  const team = [...new Set(leads.map((l) => l.owner))].slice(0, 3).map((owner) => ({ owner, contacts: filtered.filter((e) => e.actor === owner && e.type === "contacted").length, proposals: filtered.filter((e) => e.actor === owner && e.type === "proposal").length, closed: filtered.filter((e) => e.actor === owner && e.type === "closed").length }));
-  const topBlock = funnelMetrics.slice(1).reduce((prev, curr) => curr[2] < prev[2] ? curr : prev, funnelMetrics[1]);
+  const team = [...new Set(leads.map((l) => l.owner))].slice(0, 3).map((owner) => ({ owner, contacts: filtered.filter((e) => e.actor === owner && movedBetween(e, "Pendiente", "Contactado")).length, proposals: filtered.filter((e) => e.actor === owner && movedBetween(e, "Respondió", "Propuesta enviada")).length, closed: filtered.filter((e) => e.actor === owner && movedBetween(e, "Reunión agendada", "Cerrado")).length }));
+  const topBlock = funnelMetrics.slice(1).reduce((prev, curr) => curr.rate < prev.rate ? curr : prev, funnelMetrics[1]);
 
   return <div className="page-content">
     <div className="page-heading"><div><p className="eyebrow">Centro de control</p><h1>Buen día, equipo <span>👋</span></h1><p>Así viene el rendimiento comercial de Sincro.</p></div><div className="period-control">{(["hoy","semana","mes"] as const).map((p) => <button key={p} className={period === p ? "active" : ""} onClick={() => setPeriod(p)}>{p === "hoy" ? "Hoy" : p === "semana" ? "7 días" : "30 días"}</button>)}</div></div>
     <section className="metric-grid">{cards.map(({ label, value, icon: Icon, color, delta }) => <article className="metric-card" key={label}><div className={`metric-icon ${color}`}><Icon size={19}/></div><div className="metric-copy"><small>{label}</small><strong>{value}</strong><span className={delta.startsWith("+") ? "positive" : ""}>{delta.startsWith("+") && <ArrowUp size={12}/>} {delta}</span></div></article>)}</section>
     <section className="dashboard-grid">
-      <article className="panel funnel-panel"><div className="panel-heading"><div><h2>Embudo de conversión</h2><p>Conversión sobre total de prospectos</p></div><button className="text-button" onClick={() => setPage("pipeline")}>Ver pipeline <ArrowDown size={14}/></button></div><div className="funnel">{funnelMetrics.map(([label, value, rate, color]) => <div className="funnel-row" key={label}><div className="funnel-label"><span>{label}</span><strong>{value}</strong></div><div className="funnel-track"><div style={{ width: `${Math.max(rate, value ? 6 : 0)}%`, background: color }}><span>{rate}%</span></div></div><div className="stage-rate">{value} de {totalLeads} prospectos</div></div>)}</div></article>
-      <article className="panel insight-panel"><div className="insight-icon"><Target size={21}/></div><p className="eyebrow">Lectura del embudo</p><h2>La mayor oportunidad está en<br/><span>{topBlock[0]}</span></h2><p>Esta etapa concentra la caída más fuerte del período. Revisar el mensaje o material usado acá puede mejorar todo el cierre.</p><div className="insight-stat"><strong>{totalLeads ? Math.max(1, Math.round(totalLeads / Math.max(counts.closed, 1))) : 0}</strong><span>prospectos por cada<br/>cliente cerrado</span></div><button onClick={() => setPage("mensajes")}>Revisar mensajes <ArrowDown size={14}/></button></article>
+      <article className="panel funnel-panel"><div className="panel-heading"><div><h2>Embudo de conversión</h2><p>Conversión desde la etapa anterior</p></div><button className="text-button" onClick={() => setPage("pipeline")}>Ver pipeline <ArrowDown size={14}/></button></div><div className="funnel">{funnelMetrics.map(({ label, value, rate, base, color }) => <div className="funnel-row" key={label}><div className="funnel-label"><span>{label}</span><strong>{value}</strong></div><div className="funnel-track"><div style={{ width: `${Math.max(rate, value ? 6 : 0)}%`, background: color }}><span>{rate}%</span></div></div><div className="stage-rate">{value} de {base} etapa anterior</div></div>)}</div></article>
+      <article className="panel insight-panel"><div className="insight-icon"><Target size={21}/></div><p className="eyebrow">Lectura del embudo</p><h2>La mayor oportunidad está en<br/><span>{topBlock.label}</span></h2><p>Esta etapa concentra la caída más fuerte del período. Revisar el mensaje o material usado acá puede mejorar todo el cierre.</p><div className="insight-stat"><strong>{bases.closed ? Math.max(1, Math.round(bases.closed / Math.max(counts.closed, 1))) : 0}</strong><span>reuniones por cada<br/>cliente cerrado</span></div><button onClick={() => setPage("mensajes")}>Revisar mensajes <ArrowDown size={14}/></button></article>
       <article className="panel activity-panel"><div className="panel-heading"><div><h2>Actividad reciente</h2><p>Últimos movimientos del equipo</p></div><Activity size={18}/></div><div className="activity-list">{activity.map((event) => { const lead = leadById.get(event.leadId); return <div className="activity-item" key={event.id}><div className="avatar mini">{initials(event.actor)}</div><div><p><strong>{event.actor.split("@")[0]}</strong> {eventLabels[event.type] ?? "actualizó a"} <b>{lead?.businessName ?? "un prospecto"}</b></p><small>{relativeTime(event.createdAt)}</small></div><span className="activity-dot" style={{ background: stageMeta[event.toStatus ?? "Pendiente"]?.color }}/></div>; })}</div></article>
       <article className="panel team-panel"><div className="panel-heading"><div><h2>Rendimiento del equipo</h2><p>Actividad en el período</p></div><Users size={18}/></div><div className="team-table"><div className="team-row header"><span>Responsable</span><span>Contactos</span><span>Propuestas</span><span>Cierres</span></div>{team.map((m) => <div className="team-row" key={m.owner}><span><div className="avatar tiny">{initials(m.owner)}</div>{m.owner}</span><strong>{m.contacts}</strong><strong>{m.proposals}</strong><strong>{m.closed}</strong></div>)}</div></article>
     </section>
