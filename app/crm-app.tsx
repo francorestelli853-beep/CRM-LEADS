@@ -247,41 +247,109 @@ function Importer({ api, refresh }: { api:(p:Record<string,unknown>)=>Promise<an
   return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Carga masiva</p><h1>Importar Excel</h1><p>Subí una lista y validala antes de sumarla a la base compartida.</p></div><a className="secondary-button" href="/Plantilla_Prospectos_Sincro_CRM.xlsx" download><Download size={16}/> Descargar plantilla</a></div><section className="import-grid"><article className="panel instructions"><div className="step-number">01</div><h2>Completá la plantilla</h2><p>Solo necesitás el nombre del negocio y un email o teléfono. El resto ayuda a ordenar y distribuir el trabajo.</p><ul><li><Check/> Responsables válidos: Franco, Trezza y Laucha</li><li><Check/> Un negocio por fila</li><li><Check/> No repitas email o teléfono</li></ul><a href="/Plantilla_Prospectos_Sincro_CRM.xlsx" download><FileSpreadsheet/> Plantilla_Prospectos_Sincro_CRM.xlsx <Download/></a></article><article className="panel upload-panel"><div className="step-number">02</div><h2>Subí el archivo completo</h2><label className="dropzone"><Upload size={30}/><strong>{name||"Arrastrá o elegí tu Excel"}</strong><span>Formatos .xlsx, .xls o .csv</span><input type="file" accept=".xlsx,.xls,.csv" onChange={(e)=>e.target.files?.[0]&&void readFile(e.target.files[0])}/></label>{result&&<p className={`import-result ${rows.length?"":"warning"}`}>{result}</p>}{rows.length>0&&<button className="primary-button import-confirm" onClick={()=>void commit()} disabled={busy}>{busy?<LoaderCircle className="spin" size={17}/>:<Upload size={17}/>} Confirmar importación</button>}</article></section>{rows.length>0&&<section className="panel preview-panel"><div className="panel-heading"><div><h2>Vista previa</h2><p>{rows.length} filas detectadas · responsables alineados con la plantilla</p></div></div><div className="table-scroll"><table><thead><tr><th>Negocio</th><th>Email</th><th>Teléfono</th><th>Rubro</th><th>Responsable</th><th>Estado</th></tr></thead><tbody>{rows.slice(0,20).map((r,i)=><tr key={i}><td><strong>{r.businessName}</strong></td><td>{r.email||"—"}</td><td>{r.phone||"—"}</td><td>{r.segment||"General"}</td><td>{r.owner}</td><td>{r.status||"Pendiente"}</td></tr>)}</tbody></table></div></section>}</div>;
 }
 
-const appointmentFlowBody = `MSJ 1
-Buenas, ¿cómo va?
+const appointmentFlowBody = `MSJ 1 - apertura simple
+Buenas, ¿cómo va? Te hago una consulta rápida.
 
-Nota: puede salir automático o escrito por una persona. Si responde, seguimos con el mismo filtro.
+MSJ 2 - filtro de agenda
+¿Hoy los turnos / reservas los toman principalmente por WhatsApp?
 
-MSJ 2
-¿Todos los turnos los toman por WhatsApp?
+SI RESPONDE: "Sí, por WhatsApp"
+Perfecto. Justo por eso te escribía. Estamos armando sistemas de agendamiento automático para negocios de {{rubro}}, para que los clientes puedan reservar 24 hs sin que ustedes tengan que estar pendientes del teléfono.
 
-SI RESPONDE: "Sí, solo tomamos turnos por WhatsApp"
-Perfecto. Te comento: trabajamos con varias casas de {{rubro}} implementando un sistema de agendamiento automático para que los clientes puedan entrar y sacar turno las 24 hs, sin que ustedes tengan que estar pendientes del teléfono.
+MSJ 3 - resultado concreto
+La idea no es sumarles trabajo, sino sacarles mensajes repetidos: horarios disponibles, datos del cliente, confirmaciones y recordatorios. Todo puede quedar conectado a su WhatsApp, a su web actual o a una web nueva si todavía no tienen una buena.
 
-MSJ 3
-Si te interesa la idea, puedo mostrarte una demo de cómo podría quedar implementado para {{negocio}}.
-
-SI RESPONDE: "Se lo envío al dueño / encargado"
-Perfecto. ¿Me pasás el WhatsApp o mail de la persona que lo ve? Así le mando una demo corta y concreta para que evalúe si les sirve.
-
-SI RESPONDE: "Gracias, no estoy interesado"
-Tranqui, te hago una sola pregunta para no insistirte mal: ¿hoy no te interesa por presupuesto, por falta de tiempo o porque ya lo tienen resuelto? Si es por tiempo, te puedo mandar una demo de 2 minutos y la ves cuando puedas. Si no te aporta nada, cierro acá sin problema.
-
-SI RESPONDE: "Ya tengo página web"
-Genial, mejor todavía. No reemplaza la web: podemos integrar el sistema ahí mismo para que quien entre pueda reservar turno sin escribirles. La idea es sumar una capa de agendamiento, no cambiar lo que ya tienen.
+MSJ 4 - pedir microcompromiso
+Si te interesa, te puedo mostrar una demo aplicada a {{negocio}}. Son 10/15 minutos y ves exactamente cómo quedaría el flujo antes de decidir nada.
 
 SI RESPONDE: "Me interesa"
-Buenísimo. ¿Te va una llamada de 15 minutos? Te muestro una demo con el flujo aplicado a {{negocio}} y vemos si tiene sentido para ustedes.
+Buenísimo. ¿Te queda mejor hoy a la tarde o mañana? Te muestro una demo corta con el sistema aplicado a {{negocio}} y vemos si realmente les ahorra tiempo.
+
+SI RESPONDE: "Mandame info"
+Sí, te mando. Para no mandarte algo genérico: ¿hoy qué les molesta más, perder turnos porque responden tarde, contestar siempre lo mismo o tener que ordenar horarios manualmente?
+
+SI RESPONDE: "Se lo paso al dueño / encargado"
+Perfecto. ¿Me pasás su WhatsApp o mail? Así le mando una demo corta y concreta, no un texto largo. Si prefiere, también puedo armarle un ejemplo con el nombre de {{negocio}}.
+
+SI RESPONDE: "Ya tengo página web"
+Genial, eso ayuda. No buscamos reemplazar la web: podemos integrar el agendamiento dentro de la web que ya tienen, para que el cliente reserve sin tener que escribirles y esperar respuesta.
 
 SI RESPONDE: "Usamos una app / sistema"
-Perfecto. En ese caso probablemente ya tengan una parte resuelta. ¿La gente realmente agenda sola por ahí o igual terminan coordinando bastante por WhatsApp?`;
+Buenísimo. Entonces quizá ya tienen una parte resuelta. Te pregunto algo puntual: ¿la gente agenda sola por ahí o igual terminan coordinando bastante por WhatsApp?
+
+SI RESPONDE: "No, no tomamos turnos por WhatsApp"
+Perfecto, gracias por aclararme. ¿Cómo lo resuelven hoy: llamada, Instagram, una app o presencial? Te pregunto porque si el flujo ya está bien resuelto, probablemente no tenga sentido molestarte.
+
+CIERRE - agendar demo
+Excelente. Te propongo algo simple: hacemos una demo de 15 minutos, te muestro cómo quedaría en {{negocio}} y si no ves valor real, lo dejamos ahí. ¿Hoy o mañana?`;
+
+const objectionFlowBody = `OBJECIÓN: "No estoy interesado"
+Te entiendo. Para cerrar bien y no insistirte de más: ¿no te interesa porque ya lo tienen resuelto, por presupuesto o porque ahora no es prioridad?
+
+OBJECIÓN: "Es caro / no hay presupuesto"
+Tiene sentido cuidar el presupuesto. La pregunta sería si hoy están perdiendo más por turnos no respondidos, ausencias o tiempo del equipo contestando mensajes. Si querés, en 10 minutos calculamos si tiene sentido económico antes de hablar de precio.
+
+OBJECIÓN: "No tengo tiempo"
+Justamente apunta a eso. No te propongo una reunión larga: te muestro una demo de 10 minutos y decidís si vale la pena seguir. Si no te ahorra tiempo, no avanzamos.
+
+OBJECIÓN: "Ahora no"
+Dale. Para ubicarme: ¿"ahora no" es esta semana, este mes o este trimestre? Así no te persigo al pedo y te escribo cuando tenga sentido.
+
+OBJECIÓN: "Ya tenemos alguien que responde"
+Perfecto. Esto no reemplaza a la persona: le saca lo repetitivo. La persona puede enfocarse en vender, resolver casos especiales o atender mejor, mientras el sistema toma datos, confirma y ordena turnos.
+
+OBJECIÓN: "Mis clientes prefieren escribir"
+Totalmente, por eso no les sacamos WhatsApp. La idea es que puedan escribir igual, pero que el sistema los guíe a reservar sin esperar a que alguien esté libre para responder.
+
+OBJECIÓN: "Ya probé algo parecido y no funcionó"
+Te creo. Normalmente falla cuando es genérico o le pide demasiado al cliente. Lo que hacemos es armarlo sobre el flujo real del negocio. Si querés, revisamos qué falló y te digo honestamente si tiene sentido intentarlo de nuevo.
+
+OBJECIÓN: "Hablame más adelante"
+Obvio. ¿Te parece que te escriba el martes que viene o preferís que lo dejemos para principio de mes? Así queda ordenado y no te mando mensajes al azar.
+
+OBJECIÓN: "No quiero cambiar mi forma de trabajar"
+Está bien. La idea no es cambiar lo que ya funciona, sino automatizar lo repetido. Si hoy contestan 30 veces lo mismo, el sistema toma esa parte y ustedes mantienen el control.
+
+RESPUESTA CORTANTE: "No gracias"
+Gracias por responder. Te dejo tranquilo entonces. Si más adelante quieren que los turnos se reserven solos desde WhatsApp o web, escribime y te muestro un ejemplo.`;
+
+const followUpFlowBody = `FOLLOW UP 1 - no respondió al filtro
+Te consulto de nuevo por si se perdió el mensaje: ¿los turnos de {{negocio}} los toman por WhatsApp o usan otro sistema?
+
+FOLLOW UP 2 - abrió interés pero no contestó
+Me quedé pensando en {{negocio}}. Si hoy están tomando turnos por WhatsApp, probablemente podamos ahorrarles bastante ida y vuelta. ¿Querés que te muestre una demo corta?
+
+FOLLOW UP 3 - después de mandar info
+¿Pudiste verlo? Te lo resumo simple: el cliente entra, elige horario, deja sus datos y queda confirmado sin que ustedes respondan manualmente cada mensaje.
+
+FOLLOW UP 4 - dueño / encargado
+¿Pudiste pasárselo al dueño/encargado? Si querés, le mando directamente una demo corta y se evita el ida y vuelta.
+
+FOLLOW UP 5 - cierre amable
+Te cierro por acá para no molestarte. Si en algún momento quieren automatizar reservas por WhatsApp o sumarlo a la web, me escribís y lo vemos sin compromiso.`;
 
 const suggestedFlows: Template[] = [{
   id: "suggested_appointment_flow",
-  name: "Flujo: agendamiento automático por WhatsApp",
+  name: "Flujo principal: agendamiento 24 hs",
   channel: "WhatsApp",
   stage: "Contactado",
   body: appointmentFlowBody,
+  active: true,
+  createdAt: "",
+}, {
+  id: "suggested_objection_flow",
+  name: "Flujo de objeciones: agenda automática",
+  channel: "WhatsApp",
+  stage: "Respondió",
+  body: objectionFlowBody,
+  active: true,
+  createdAt: "",
+}, {
+  id: "suggested_followup_flow",
+  name: "Flujo de seguimiento: agenda automática",
+  channel: "WhatsApp",
+  stage: "Contactado",
+  body: followUpFlowBody,
   active: true,
   createdAt: "",
 }];
@@ -297,18 +365,19 @@ function conversationBlocks(body: string) {
   }).filter((block) => block.title || block.content);
 }
 
-function FlowPreview({ body }: { body: string }) {
-  return <div className="flow-preview">{conversationBlocks(body).map((block, index) => <div className={`flow-block ${block.kind}`} key={`${block.title}-${index}`}><strong>{block.title}</strong>{block.content && <p>{block.content}</p>}</div>)}</div>;
+function FlowPreview({ templateId, body, copied, copyBlock }: { templateId:string; body: string; copied:string; copyBlock:(id:string,text:string)=>Promise<void> }) {
+  return <div className="flow-preview">{conversationBlocks(body).map((block, index) => { const blockId=`${templateId}_${index}`; const text=block.content || block.title; return <div className={`flow-block ${block.kind}`} key={blockId}><div className="flow-block-head"><strong>{block.title}</strong><button onClick={()=>void copyBlock(blockId,text)}>{copied===blockId?<><Check size={13}/> Copiado</>:<><Copy size={13}/> Copiar</>}</button></div>{block.content && <p>{block.content}</p>}</div>; })}</div>;
 }
 
-function FlowCard({ template, copied, deletingId, suggested, edit, remove, copy }: { template:Template; copied:string; deletingId:string; suggested?:boolean; edit:(t:Template)=>void; remove?:(t:Template)=>void; copy:(t:Template)=>Promise<void> }) {
-  return <article className={`template-card flow-card ${suggested?"suggested":""}`}><header><span className={`channel ${template.channel.toLowerCase()}`}>{template.channel==="WhatsApp"?<Phone size={14}/>:<Mail size={14}/>} {template.channel}</span><span className="template-stage">{template.stage}</span></header><h2>{template.name}</h2><FlowPreview body={template.body}/><footer><small>Variables: <b>{"{{negocio}}"}</b> y <b>{"{{rubro}}"}</b></small><div className="template-actions"><button onClick={()=>edit(template)}><Pencil size={14}/> {suggested?"Usar":"Editar"}</button>{remove&&<button className="delete-template" disabled={deletingId===template.id} onClick={()=>void remove(template)}>{deletingId===template.id?<LoaderCircle className="spin" size={14}/>:<Trash2 size={14}/>} Eliminar</button>}<button onClick={()=>void copy(template)}>{copied===template.id?<><Check size={14}/> Copiado</>:<><Copy size={14}/> Copiar</>}</button></div></footer></article>;
+function FlowCard({ template, copied, deletingId, suggested, edit, remove, copy, copyBlock }: { template:Template; copied:string; deletingId:string; suggested?:boolean; edit:(t:Template)=>void; remove?:(t:Template)=>void; copy:(t:Template)=>Promise<void>; copyBlock:(id:string,text:string)=>Promise<void> }) {
+  return <article className={`template-card flow-card ${suggested?"suggested":""}`}><header><span className={`channel ${template.channel.toLowerCase()}`}>{template.channel==="WhatsApp"?<Phone size={14}/>:<Mail size={14}/>} {template.channel}</span><span className="template-stage">{template.stage}</span></header><h2>{template.name}</h2><FlowPreview templateId={template.id} body={template.body} copied={copied} copyBlock={copyBlock}/><footer><small>Variables: <b>{"{{negocio}}"}</b> y <b>{"{{rubro}}"}</b></small><div className="template-actions"><button onClick={()=>edit(template)}><Pencil size={14}/> {suggested?"Usar":"Editar"}</button>{remove&&<button className="delete-template" disabled={deletingId===template.id} onClick={()=>void remove(template)}>{deletingId===template.id?<LoaderCircle className="spin" size={14}/>:<Trash2 size={14}/>} Eliminar</button>}<button onClick={()=>void copy(template)}>{copied===template.id?<><Check size={14}/> Todo copiado</>:<><Copy size={14}/> Copiar todo</>}</button></div></footer></article>;
 }
 
 function Messages({ templates, api, refresh }: { templates:Template[]; api:(p:Record<string,unknown>)=>Promise<any>; refresh:()=>Promise<void> }) {
   const emptyForm={name:"",channel:"WhatsApp",stage:"Pendiente",body:""};
   const [copied,setCopied]=useState(""); const [modalOpen,setModalOpen]=useState(false); const [editingId,setEditingId]=useState<string|null>(null); const [form,setForm]=useState(emptyForm); const [busy,setBusy]=useState(false); const [formError,setFormError]=useState(""); const [deletingId,setDeletingId]=useState("");
   async function copy(t:Template){await navigator.clipboard.writeText(t.body);setCopied(t.id);setTimeout(()=>setCopied(""),1800)}
+  async function copyBlock(id:string,text:string){await navigator.clipboard.writeText(text);setCopied(id);setTimeout(()=>setCopied(""),1800)}
   function closeModal(){if(busy)return;setModalOpen(false);setEditingId(null);setForm(emptyForm);setFormError("");}
   function createTemplate(){setEditingId(null);setForm(emptyForm);setFormError("");setModalOpen(true);}
   function editTemplate(t:Template){setEditingId(t.id.startsWith("suggested_")?null:t.id);setForm({name:t.name,channel:t.channel,stage:t.stage,body:t.body});setFormError("");setModalOpen(true);}
@@ -316,7 +385,7 @@ function Messages({ templates, api, refresh }: { templates:Template[]; api:(p:Re
   async function remove(t:Template){if(!window.confirm(`¿Eliminar el flujo "${t.name}"? Esta acción no se puede deshacer.`))return;setDeletingId(t.id);try{await api({action:"deleteTemplate",templateId:t.id});await refresh();}catch(e){window.alert(e instanceof Error?e.message:"No se pudo eliminar el flujo");}finally{setDeletingId("");}}
   const savedFlowNames = new Set(templates.map((t)=>t.name.trim().toLowerCase()));
   const visibleSuggestions = suggestedFlows.filter((flow)=>!savedFlowNames.has(flow.name.trim().toLowerCase()));
-  return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Biblioteca compartida</p><h1>Flujos de conversación</h1><p>Guiones por etapa con caminos posibles según lo que responde cada prospecto.</p></div><button className="primary-button" onClick={createTemplate}><Plus size={17}/> Nuevo flujo</button></div>{visibleSuggestions.length>0&&<section className="flow-suggestions"><div className="panel-heading"><div><h2>Flujos sugeridos</h2><p>Base editable para que el equipo tenga una guía común.</p></div></div><div className="template-grid">{visibleSuggestions.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} suggested edit={editTemplate} copy={copy}/>)}</div></section>}<div className="template-grid">{templates.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} edit={editTemplate} remove={remove} copy={copy}/>)}</div>{!templates.length&&!visibleSuggestions.length&&<div className="empty-state"><MessageSquareText/><h3>No hay flujos</h3><p>Creá un flujo para empezar a ordenar las conversaciones del equipo.</p></div>}{modalOpen&&<div className="modal-backdrop" onMouseDown={closeModal}><div className="modal-card template-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Biblioteca</p><h2>{editingId?"Editar flujo":"Nuevo flujo"}</h2></div><button className="icon-button" onClick={closeModal} disabled={busy}><X/></button></div><label>Nombre<input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ej: Flujo para agendamiento automático"/></label><div className="form-row"><label>Canal<select value={form.channel} onChange={(e)=>setForm({...form,channel:e.target.value})}><option>WhatsApp</option><option>Email</option></select></label><label>Etapa<select value={form.stage} onChange={(e)=>setForm({...form,stage:e.target.value})}>{stages.map((s)=><option key={s}>{s}</option>)}</select></label></div><label>Flujo<textarea value={form.body} onChange={(e)=>setForm({...form,body:e.target.value})} rows={12} placeholder={"MSJ 1\nBuenas, ¿cómo va?\n\nSI RESPONDE: Me interesa\nAgendar reunión breve..."} /></label>{formError&&<p className="form-error">{formError}</p>}<div className="modal-actions"><button className="secondary-button" onClick={closeModal} disabled={busy}>Cancelar</button><button className="primary-button" onClick={()=>void save()} disabled={busy}>{busy&&<LoaderCircle className="spin" size={16}/>} {editingId?"Guardar cambios":"Crear flujo"}</button></div></div></div>}</div>;
+  return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Biblioteca compartida</p><h1>Flujos de conversación</h1><p>Guiones por etapa con caminos posibles según lo que responde cada prospecto.</p></div><button className="primary-button" onClick={createTemplate}><Plus size={17}/> Nuevo flujo</button></div>{visibleSuggestions.length>0&&<section className="flow-suggestions"><div className="panel-heading"><div><h2>Flujos sugeridos</h2><p>Base editable para que el equipo tenga una guía común.</p></div></div><div className="template-grid">{visibleSuggestions.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} suggested edit={editTemplate} copy={copy} copyBlock={copyBlock}/>)}</div></section>}<div className="template-grid">{templates.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} edit={editTemplate} remove={remove} copy={copy} copyBlock={copyBlock}/>)}</div>{!templates.length&&!visibleSuggestions.length&&<div className="empty-state"><MessageSquareText/><h3>No hay flujos</h3><p>Creá un flujo para empezar a ordenar las conversaciones del equipo.</p></div>}{modalOpen&&<div className="modal-backdrop" onMouseDown={closeModal}><div className="modal-card template-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Biblioteca</p><h2>{editingId?"Editar flujo":"Nuevo flujo"}</h2></div><button className="icon-button" onClick={closeModal} disabled={busy}><X/></button></div><label>Nombre<input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ej: Flujo para agendamiento automático"/></label><div className="form-row"><label>Canal<select value={form.channel} onChange={(e)=>setForm({...form,channel:e.target.value})}><option>WhatsApp</option><option>Email</option></select></label><label>Etapa<select value={form.stage} onChange={(e)=>setForm({...form,stage:e.target.value})}>{stages.map((s)=><option key={s}>{s}</option>)}</select></label></div><label>Flujo<textarea value={form.body} onChange={(e)=>setForm({...form,body:e.target.value})} rows={12} placeholder={"MSJ 1\nBuenas, ¿cómo va?\n\nSI RESPONDE: Me interesa\nAgendar reunión breve..."} /></label>{formError&&<p className="form-error">{formError}</p>}<div className="modal-actions"><button className="secondary-button" onClick={closeModal} disabled={busy}>Cancelar</button><button className="primary-button" onClick={()=>void save()} disabled={busy}>{busy&&<LoaderCircle className="spin" size={16}/>} {editingId?"Guardar cambios":"Crear flujo"}</button></div></div></div>}</div>;
 }
 
 function AddLead({ currentUser, api, close, saved }: { currentUser:string; api:(p:Record<string,unknown>)=>Promise<any>; close:()=>void; saved:()=>Promise<void> }) {
