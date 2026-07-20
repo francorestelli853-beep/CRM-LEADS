@@ -247,16 +247,76 @@ function Importer({ api, refresh }: { api:(p:Record<string,unknown>)=>Promise<an
   return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Carga masiva</p><h1>Importar Excel</h1><p>Subí una lista y validala antes de sumarla a la base compartida.</p></div><a className="secondary-button" href="/Plantilla_Prospectos_Sincro_CRM.xlsx" download><Download size={16}/> Descargar plantilla</a></div><section className="import-grid"><article className="panel instructions"><div className="step-number">01</div><h2>Completá la plantilla</h2><p>Solo necesitás el nombre del negocio y un email o teléfono. El resto ayuda a ordenar y distribuir el trabajo.</p><ul><li><Check/> Responsables válidos: Franco, Trezza y Laucha</li><li><Check/> Un negocio por fila</li><li><Check/> No repitas email o teléfono</li></ul><a href="/Plantilla_Prospectos_Sincro_CRM.xlsx" download><FileSpreadsheet/> Plantilla_Prospectos_Sincro_CRM.xlsx <Download/></a></article><article className="panel upload-panel"><div className="step-number">02</div><h2>Subí el archivo completo</h2><label className="dropzone"><Upload size={30}/><strong>{name||"Arrastrá o elegí tu Excel"}</strong><span>Formatos .xlsx, .xls o .csv</span><input type="file" accept=".xlsx,.xls,.csv" onChange={(e)=>e.target.files?.[0]&&void readFile(e.target.files[0])}/></label>{result&&<p className={`import-result ${rows.length?"":"warning"}`}>{result}</p>}{rows.length>0&&<button className="primary-button import-confirm" onClick={()=>void commit()} disabled={busy}>{busy?<LoaderCircle className="spin" size={17}/>:<Upload size={17}/>} Confirmar importación</button>}</article></section>{rows.length>0&&<section className="panel preview-panel"><div className="panel-heading"><div><h2>Vista previa</h2><p>{rows.length} filas detectadas · responsables alineados con la plantilla</p></div></div><div className="table-scroll"><table><thead><tr><th>Negocio</th><th>Email</th><th>Teléfono</th><th>Rubro</th><th>Responsable</th><th>Estado</th></tr></thead><tbody>{rows.slice(0,20).map((r,i)=><tr key={i}><td><strong>{r.businessName}</strong></td><td>{r.email||"—"}</td><td>{r.phone||"—"}</td><td>{r.segment||"General"}</td><td>{r.owner}</td><td>{r.status||"Pendiente"}</td></tr>)}</tbody></table></div></section>}</div>;
 }
 
+const appointmentFlowBody = `MSJ 1
+Buenas, ¿cómo va?
+
+Nota: puede salir automático o escrito por una persona. Si responde, seguimos con el mismo filtro.
+
+MSJ 2
+¿Todos los turnos los toman por WhatsApp?
+
+SI RESPONDE: "Sí, solo tomamos turnos por WhatsApp"
+Perfecto. Te comento: trabajamos con varias casas de {{rubro}} implementando un sistema de agendamiento automático para que los clientes puedan entrar y sacar turno las 24 hs, sin que ustedes tengan que estar pendientes del teléfono.
+
+MSJ 3
+Si te interesa la idea, puedo mostrarte una demo de cómo podría quedar implementado para {{negocio}}.
+
+SI RESPONDE: "Se lo envío al dueño / encargado"
+Perfecto. ¿Me pasás el WhatsApp o mail de la persona que lo ve? Así le mando una demo corta y concreta para que evalúe si les sirve.
+
+SI RESPONDE: "Gracias, no estoy interesado"
+Tranqui, te hago una sola pregunta para no insistirte mal: ¿hoy no te interesa por presupuesto, por falta de tiempo o porque ya lo tienen resuelto? Si es por tiempo, te puedo mandar una demo de 2 minutos y la ves cuando puedas. Si no te aporta nada, cierro acá sin problema.
+
+SI RESPONDE: "Ya tengo página web"
+Genial, mejor todavía. No reemplaza la web: podemos integrar el sistema ahí mismo para que quien entre pueda reservar turno sin escribirles. La idea es sumar una capa de agendamiento, no cambiar lo que ya tienen.
+
+SI RESPONDE: "Me interesa"
+Buenísimo. ¿Te va una llamada de 15 minutos? Te muestro una demo con el flujo aplicado a {{negocio}} y vemos si tiene sentido para ustedes.
+
+SI RESPONDE: "Usamos una app / sistema"
+Perfecto. En ese caso probablemente ya tengan una parte resuelta. ¿La gente realmente agenda sola por ahí o igual terminan coordinando bastante por WhatsApp?`;
+
+const suggestedFlows: Template[] = [{
+  id: "suggested_appointment_flow",
+  name: "Flujo: agendamiento automático por WhatsApp",
+  channel: "WhatsApp",
+  stage: "Contactado",
+  body: appointmentFlowBody,
+  active: true,
+  createdAt: "",
+}];
+
+function conversationBlocks(body: string) {
+  return body.split(/\n{2,}/).map((block) => {
+    const [first, ...rest] = block.trim().split("\n");
+    const title = first.trim();
+    const content = rest.join("\n").trim();
+    const upper = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const kind = upper.startsWith("MSJ") ? "message" : upper.startsWith("SI RESPONDE") ? "reply" : "note";
+    return { title, content, kind };
+  }).filter((block) => block.title || block.content);
+}
+
+function FlowPreview({ body }: { body: string }) {
+  return <div className="flow-preview">{conversationBlocks(body).map((block, index) => <div className={`flow-block ${block.kind}`} key={`${block.title}-${index}`}><strong>{block.title}</strong>{block.content && <p>{block.content}</p>}</div>)}</div>;
+}
+
+function FlowCard({ template, copied, deletingId, suggested, edit, remove, copy }: { template:Template; copied:string; deletingId:string; suggested?:boolean; edit:(t:Template)=>void; remove?:(t:Template)=>void; copy:(t:Template)=>Promise<void> }) {
+  return <article className={`template-card flow-card ${suggested?"suggested":""}`}><header><span className={`channel ${template.channel.toLowerCase()}`}>{template.channel==="WhatsApp"?<Phone size={14}/>:<Mail size={14}/>} {template.channel}</span><span className="template-stage">{template.stage}</span></header><h2>{template.name}</h2><FlowPreview body={template.body}/><footer><small>Variables: <b>{"{{negocio}}"}</b> y <b>{"{{rubro}}"}</b></small><div className="template-actions"><button onClick={()=>edit(template)}><Pencil size={14}/> {suggested?"Usar":"Editar"}</button>{remove&&<button className="delete-template" disabled={deletingId===template.id} onClick={()=>void remove(template)}>{deletingId===template.id?<LoaderCircle className="spin" size={14}/>:<Trash2 size={14}/>} Eliminar</button>}<button onClick={()=>void copy(template)}>{copied===template.id?<><Check size={14}/> Copiado</>:<><Copy size={14}/> Copiar</>}</button></div></footer></article>;
+}
+
 function Messages({ templates, api, refresh }: { templates:Template[]; api:(p:Record<string,unknown>)=>Promise<any>; refresh:()=>Promise<void> }) {
   const emptyForm={name:"",channel:"WhatsApp",stage:"Pendiente",body:""};
   const [copied,setCopied]=useState(""); const [modalOpen,setModalOpen]=useState(false); const [editingId,setEditingId]=useState<string|null>(null); const [form,setForm]=useState(emptyForm); const [busy,setBusy]=useState(false); const [formError,setFormError]=useState(""); const [deletingId,setDeletingId]=useState("");
   async function copy(t:Template){await navigator.clipboard.writeText(t.body);setCopied(t.id);setTimeout(()=>setCopied(""),1800)}
   function closeModal(){if(busy)return;setModalOpen(false);setEditingId(null);setForm(emptyForm);setFormError("");}
   function createTemplate(){setEditingId(null);setForm(emptyForm);setFormError("");setModalOpen(true);}
-  function editTemplate(t:Template){setEditingId(t.id);setForm({name:t.name,channel:t.channel,stage:t.stage,body:t.body});setFormError("");setModalOpen(true);}
-  async function save(){if(!form.name.trim()||!form.body.trim()){setFormError("Completá el nombre y el mensaje.");return;}setBusy(true);setFormError("");try{await api({action:editingId?"updateTemplate":"saveTemplate",templateId:editingId,template:form});setModalOpen(false);setEditingId(null);setForm(emptyForm);await refresh();}catch(e){setFormError(e instanceof Error?e.message:"No se pudo guardar la plantilla");}finally{setBusy(false);}}
-  async function remove(t:Template){if(!window.confirm(`¿Eliminar la plantilla "${t.name}"? Esta acción no se puede deshacer.`))return;setDeletingId(t.id);try{await api({action:"deleteTemplate",templateId:t.id});await refresh();}catch(e){window.alert(e instanceof Error?e.message:"No se pudo eliminar la plantilla");}finally{setDeletingId("");}}
-  return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Biblioteca compartida</p><h1>Mensajes modelo</h1><p>El equipo copia, personaliza y envía una comunicación consistente.</p></div><button className="primary-button" onClick={createTemplate}><Plus size={17}/> Nueva plantilla</button></div><div className="template-grid">{templates.map((t)=><article className="template-card" key={t.id}><header><span className={`channel ${t.channel.toLowerCase()}`}>{t.channel==="WhatsApp"?<Phone size={14}/>:<Mail size={14}/>} {t.channel}</span><span className="template-stage">{t.stage}</span></header><h2>{t.name}</h2><p>{t.body}</p><footer><small>Usá <b>{"{{negocio}}"}</b> para personalizar</small><div className="template-actions"><button onClick={()=>editTemplate(t)}><Pencil size={14}/> Editar</button><button className="delete-template" disabled={deletingId===t.id} onClick={()=>void remove(t)}>{deletingId===t.id?<LoaderCircle className="spin" size={14}/>:<Trash2 size={14}/>} Eliminar</button><button onClick={()=>void copy(t)}>{copied===t.id?<><Check size={14}/> Copiado</>:<><Copy size={14}/> Copiar</>}</button></div></footer></article>)}</div>{!templates.length&&<div className="empty-state"><MessageSquareText/><h3>No hay plantillas</h3><p>Creá una plantilla para empezar a personalizar tus mensajes.</p></div>}{modalOpen&&<div className="modal-backdrop" onMouseDown={closeModal}><div className="modal-card template-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Biblioteca</p><h2>{editingId?"Editar plantilla":"Nueva plantilla"}</h2></div><button className="icon-button" onClick={closeModal} disabled={busy}><X/></button></div><label>Nombre<input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ej: Seguimiento después de propuesta"/></label><div className="form-row"><label>Canal<select value={form.channel} onChange={(e)=>setForm({...form,channel:e.target.value})}><option>WhatsApp</option><option>Email</option></select></label><label>Etapa<select value={form.stage} onChange={(e)=>setForm({...form,stage:e.target.value})}>{stages.map((s)=><option key={s}>{s}</option>)}</select></label></div><label>Mensaje<textarea value={form.body} onChange={(e)=>setForm({...form,body:e.target.value})} rows={7} placeholder="Escribí el mensaje modelo..."/></label>{formError&&<p className="form-error">{formError}</p>}<div className="modal-actions"><button className="secondary-button" onClick={closeModal} disabled={busy}>Cancelar</button><button className="primary-button" onClick={()=>void save()} disabled={busy}>{busy&&<LoaderCircle className="spin" size={16}/>} {editingId?"Guardar cambios":"Crear plantilla"}</button></div></div></div>}</div>;
+  function editTemplate(t:Template){setEditingId(t.id.startsWith("suggested_")?null:t.id);setForm({name:t.name,channel:t.channel,stage:t.stage,body:t.body});setFormError("");setModalOpen(true);}
+  async function save(){if(!form.name.trim()||!form.body.trim()){setFormError("Completá el nombre y el flujo.");return;}setBusy(true);setFormError("");try{await api({action:editingId?"updateTemplate":"saveTemplate",templateId:editingId,template:form});setModalOpen(false);setEditingId(null);setForm(emptyForm);await refresh();}catch(e){setFormError(e instanceof Error?e.message:"No se pudo guardar el flujo");}finally{setBusy(false);}}
+  async function remove(t:Template){if(!window.confirm(`¿Eliminar el flujo "${t.name}"? Esta acción no se puede deshacer.`))return;setDeletingId(t.id);try{await api({action:"deleteTemplate",templateId:t.id});await refresh();}catch(e){window.alert(e instanceof Error?e.message:"No se pudo eliminar el flujo");}finally{setDeletingId("");}}
+  const savedFlowNames = new Set(templates.map((t)=>t.name.trim().toLowerCase()));
+  const visibleSuggestions = suggestedFlows.filter((flow)=>!savedFlowNames.has(flow.name.trim().toLowerCase()));
+  return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Biblioteca compartida</p><h1>Flujos de conversación</h1><p>Guiones por etapa con caminos posibles según lo que responde cada prospecto.</p></div><button className="primary-button" onClick={createTemplate}><Plus size={17}/> Nuevo flujo</button></div>{visibleSuggestions.length>0&&<section className="flow-suggestions"><div className="panel-heading"><div><h2>Flujos sugeridos</h2><p>Base editable para que el equipo tenga una guía común.</p></div></div><div className="template-grid">{visibleSuggestions.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} suggested edit={editTemplate} copy={copy}/>)}</div></section>}<div className="template-grid">{templates.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} edit={editTemplate} remove={remove} copy={copy}/>)}</div>{!templates.length&&!visibleSuggestions.length&&<div className="empty-state"><MessageSquareText/><h3>No hay flujos</h3><p>Creá un flujo para empezar a ordenar las conversaciones del equipo.</p></div>}{modalOpen&&<div className="modal-backdrop" onMouseDown={closeModal}><div className="modal-card template-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Biblioteca</p><h2>{editingId?"Editar flujo":"Nuevo flujo"}</h2></div><button className="icon-button" onClick={closeModal} disabled={busy}><X/></button></div><label>Nombre<input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ej: Flujo para agendamiento automático"/></label><div className="form-row"><label>Canal<select value={form.channel} onChange={(e)=>setForm({...form,channel:e.target.value})}><option>WhatsApp</option><option>Email</option></select></label><label>Etapa<select value={form.stage} onChange={(e)=>setForm({...form,stage:e.target.value})}>{stages.map((s)=><option key={s}>{s}</option>)}</select></label></div><label>Flujo<textarea value={form.body} onChange={(e)=>setForm({...form,body:e.target.value})} rows={12} placeholder={"MSJ 1\nBuenas, ¿cómo va?\n\nSI RESPONDE: Me interesa\nAgendar reunión breve..."} /></label>{formError&&<p className="form-error">{formError}</p>}<div className="modal-actions"><button className="secondary-button" onClick={closeModal} disabled={busy}>Cancelar</button><button className="primary-button" onClick={()=>void save()} disabled={busy}>{busy&&<LoaderCircle className="spin" size={16}/>} {editingId?"Guardar cambios":"Crear flujo"}</button></div></div></div>}</div>;
 }
 
 function AddLead({ currentUser, api, close, saved }: { currentUser:string; api:(p:Record<string,unknown>)=>Promise<any>; close:()=>void; saved:()=>Promise<void> }) {
