@@ -60,12 +60,6 @@ type LeadInput = {
   nextFollowUp?: unknown;
 };
 
-const defaultTemplates = [
-  { id: "tpl_1", name: "Primer contacto - WhatsApp", channel: "WhatsApp", stage: "Pendiente", body: "Hola, \u00bfc\u00f3mo est\u00e1s? Vi el trabajo de {{negocio}} y quer\u00eda consultarte si hoy tienen procesos que les gustar\u00eda automatizar. En Sincro AI ayudamos a ordenar tareas repetitivas y seguimiento comercial. \u00bfTe puedo contar una idea puntual?" },
-  { id: "tpl_2", name: "Primer contacto - Email", channel: "Email", stage: "Pendiente", body: "Asunto: Una idea para optimizar {{negocio}}\n\nHola, \u00bfc\u00f3mo est\u00e1s? Estuve viendo {{negocio}} y detect\u00e9 una oportunidad para ahorrar tiempo en tareas operativas. En Sincro AI armamos automatizaciones a medida. \u00bfTe parece si te env\u00edo un ejemplo breve?" },
-  { id: "tpl_3", name: "Seguimiento sin respuesta", channel: "WhatsApp", stage: "No respondi\u00f3", body: "Hola, retomo este mensaje por si se te pas\u00f3. Tengo una idea concreta para simplificar parte de la operaci\u00f3n de {{negocio}}. Si te sirve, te la resumo en dos minutos por ac\u00e1." },
-  { id: "tpl_4", name: "Env\u00edo de propuesta", channel: "Email", stage: "Propuesta enviada", body: "Hola, te comparto la propuesta que conversamos. Resume el alcance, los tiempos y el impacto esperado. Si te parece, coordinamos una llamada breve para revisar dudas y pr\u00f3ximos pasos." },
-];
 const responsibleOwners = ["Franco", "Trezza", "Laucha"];
 
 function env(name: string) {
@@ -219,21 +213,9 @@ function toLead(input: LeadInput, actor: string, source: "Manual" | "Excel", now
   };
 }
 
-async function seedTemplates() {
-  const existing = await supabase<Array<{ id: string }>>("message_templates?select=id&limit=1");
-  if (existing.length) return;
-  const now = new Date().toISOString();
-  await supabase("message_templates", {
-    method: "POST",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify(defaultTemplates.map((template) => ({ ...template, active: true, created_at: now }))),
-  });
-}
-
 export async function GET(request: Request) {
   try {
     const actor = actorFrom(request);
-    await seedTemplates();
     const [leadRows, eventRows, templateRows] = await Promise.all([
       supabase<DbLead[]>("leads?select=*&order=updated_at.desc"),
       supabase<DbEvent[]>("events?select=*&order=created_at.desc&limit=2000"),
@@ -354,12 +336,15 @@ export async function POST(request: Request) {
     }
 
     if (payload.action === "saveTemplate") {
+      const name = String(payload.template?.name ?? "").trim();
+      const body = String(payload.template?.body ?? "").trim();
+      if (!name || !body) return Response.json({ error: "Completa el nombre y el mensaje." }, { status: 400 });
       const template = {
         id: id("tpl"),
-        name: String(payload.template?.name ?? "Nueva plantilla"),
-        channel: String(payload.template?.channel ?? "WhatsApp"),
+        name,
+        channel: payload.template?.channel === "Email" ? "Email" : "WhatsApp",
         stage: cleanStatus(payload.template?.stage),
-        body: String(payload.template?.body ?? ""),
+        body,
         active: true,
         created_at: now,
       };
@@ -369,6 +354,33 @@ export async function POST(request: Request) {
         body: JSON.stringify(template),
       });
       return Response.json({ template: fromTemplate(created) }, { status: 201 });
+    }
+
+    if (payload.action === "updateTemplate") {
+      const templateId = String(payload.templateId ?? "").trim();
+      const name = String(payload.template?.name ?? "").trim();
+      const body = String(payload.template?.body ?? "").trim();
+      if (!templateId) return Response.json({ error: "Plantilla no encontrada." }, { status: 404 });
+      if (!name || !body) return Response.json({ error: "Completa el nombre y el mensaje." }, { status: 400 });
+      const params = new URLSearchParams({ id: `eq.${templateId}` });
+      const [updated] = await supabase<DbTemplate[]>(`message_templates?${params.toString()}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ name, channel: payload.template?.channel === "Email" ? "Email" : "WhatsApp", stage: cleanStatus(payload.template?.stage), body }),
+      });
+      if (!updated) return Response.json({ error: "Plantilla no encontrada." }, { status: 404 });
+      return Response.json({ template: fromTemplate(updated) });
+    }
+
+    if (payload.action === "deleteTemplate") {
+      const templateId = String(payload.templateId ?? "").trim();
+      if (!templateId) return Response.json({ error: "Plantilla no encontrada." }, { status: 404 });
+      const params = new URLSearchParams({ id: `eq.${templateId}` });
+      await supabase(`message_templates?${params.toString()}`, {
+        method: "DELETE",
+        headers: { Prefer: "return=minimal" },
+      });
+      return Response.json({ ok: true });
     }
 
     return Response.json({ error: "Accion no valida" }, { status: 400 });
