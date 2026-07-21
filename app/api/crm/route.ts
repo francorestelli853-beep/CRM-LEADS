@@ -7,6 +7,7 @@ type LeadStatus =
   | "Cerrado"
   | "No respondi\u00f3"
   | "No interesado"
+  | "N\u00famero incorrecto"
   | "Perdido";
 
 type DbLead = {
@@ -112,6 +113,7 @@ function cleanStatus(value: unknown): LeadStatus {
     cerrado: "Cerrado",
     "no respondio": "No respondi\u00f3",
     "no interesado": "No interesado",
+    "numero incorrecto": "N\u00famero incorrecto",
     perdido: "Perdido",
   };
   return statuses[normalized] ?? "Pendiente";
@@ -134,6 +136,7 @@ function eventType(status: string) {
     Cerrado: "closed",
     ["No respondi\u00f3"]: "no_reply",
     "No interesado": "not_interested",
+    ["N\u00famero incorrecto"]: "wrong_number",
     Perdido: "lost",
   } as Record<string, string>)[status] ?? "stage_changed";
 }
