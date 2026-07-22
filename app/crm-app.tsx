@@ -144,25 +144,26 @@ function Loading() { return <div className="loading"><LoaderCircle className="sp
 
 function Dashboard({ leads, events, period, setPeriod, setPage }: { leads: Lead[]; events: Event[]; period: string; setPeriod: (p: "hoy"|"semana"|"mes") => void; setPage: (p: Page) => void }) {
   const cutoff = Date.now() - (period === "hoy" ? dayMs : period === "semana" ? 7 * dayMs : 30 * dayMs);
-  const filtered = events.filter((e) => new Date(e.createdAt).getTime() >= cutoff);
+  const periodEvents = events.filter((e) => new Date(e.createdAt).getTime() >= cutoff);
   const safeRate = (n: number, d: number) => d ? Math.round(n / d * 100) : 0;
-  const totalLeads = leads.length;
+  const countTransition = (from: string, to: string) => periodEvents.filter((event) => movedBetween(event, from, to)).length;
   const counts = {
-    contacted: leads.filter((l) => !reachedStatus(l, ["Pendiente", "Número incorrecto"])).length,
-    replied: leads.filter((l) => reachedStatus(l, ["Respondió", "No interesado", "Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
-    proposal: leads.filter((l) => reachedStatus(l, ["Propuesta enviada", "Reunión agendada", "Cerrado"])).length,
-    meeting: leads.filter((l) => reachedStatus(l, ["Reunión agendada", "Cerrado"])).length,
-    closed: leads.filter((l) => reachedStatus(l, ["Cerrado"])).length,
+    contacted: countTransition("Pendiente", "Contactado"),
+    replied: countTransition("Contactado", "Respondió"),
+    proposal: countTransition("Respondió", "Propuesta enviada"),
+    meeting: countTransition("Propuesta enviada", "Reunión agendada"),
+    closed: countTransition("Reunión agendada", "Cerrado"),
   };
+  const pendingBase = leads.filter((l) => reachedStatus(l, ["Pendiente"])).length + counts.contacted;
   const bases = {
-    contacted: totalLeads,
-    replied: counts.contacted,
-    proposal: counts.replied,
-    meeting: counts.proposal,
-    closed: counts.meeting,
+    contacted: pendingBase,
+    replied: counts.contacted + counts.replied,
+    proposal: counts.replied + counts.proposal,
+    meeting: counts.proposal + counts.meeting,
+    closed: counts.meeting + counts.closed,
   };
   const cards = [
-    { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: `${safeRate(counts.contacted, bases.contacted)}% del total` }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, bases.replied)}% de contactados` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, bases.proposal)}% de respuestas` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, bases.meeting)}% de propuestas` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, bases.closed)}% de reuniones` },
+    { label: "Contactados", value: counts.contacted, icon: Mail, color: "blue", delta: `${safeRate(counts.contacted, bases.contacted)}% de pendientes` }, { label: "Respondieron", value: counts.replied, icon: MessageSquareText, color: "purple", delta: `${safeRate(counts.replied, bases.replied)}% de contactados` }, { label: "Propuestas", value: counts.proposal, icon: Clipboard, color: "orange", delta: `${safeRate(counts.proposal, bases.proposal)}% de respuestas` }, { label: "Reuniones", value: counts.meeting, icon: CalendarClock, color: "teal", delta: `${safeRate(counts.meeting, bases.meeting)}% de propuestas` }, { label: "Cerrados", value: counts.closed, icon: CircleDollarSign, color: "green", delta: `${safeRate(counts.closed, bases.closed)}% de reuniones` },
   ];
   const funnelMetrics = [
     { label: "Contactados", value: counts.contacted, rate: safeRate(counts.contacted, bases.contacted), base: bases.contacted, color: "#0A2540" },
@@ -171,18 +172,26 @@ function Dashboard({ leads, events, period, setPeriod, setPage }: { leads: Lead[
     { label: "Reunión agendada", value: counts.meeting, rate: safeRate(counts.meeting, bases.meeting), base: bases.meeting, color: "#287665" },
     { label: "Cliente cerrado", value: counts.closed, rate: safeRate(counts.closed, bases.closed), base: bases.closed, color: "#2E7D32" },
   ] as const;
-  const activity = events.slice(0, 5);
+  const activity = periodEvents.slice(0, 5);
   const leadById = new Map(leads.map((l) => [l.id, l]));
-  const team = [...new Set(leads.map((l) => l.owner))].slice(0, 3).map((owner) => ({ owner, contacts: filtered.filter((e) => e.actor === owner && movedBetween(e, "Pendiente", "Contactado")).length, proposals: filtered.filter((e) => e.actor === owner && movedBetween(e, "Respondió", "Propuesta enviada")).length, closed: filtered.filter((e) => e.actor === owner && movedBetween(e, "Reunión agendada", "Cerrado")).length }));
+  const ownerFromEvent = (event: Event) => {
+    const actor = normalizedStatus(event.actor);
+    return responsibleOwners.find((owner) => actor.includes(normalizedStatus(owner))) ?? leadById.get(event.leadId)?.owner ?? "Sin responsable";
+  };
+  const teamOwners = [...new Set([...responsibleOwners, ...periodEvents.map(ownerFromEvent)])].filter(Boolean);
+  const team = teamOwners.map((owner) => {
+    const ownerEvents = periodEvents.filter((event) => ownerFromEvent(event) === owner);
+    return { owner, contacts: ownerEvents.filter((e) => movedBetween(e, "Pendiente", "Contactado")).length, proposals: ownerEvents.filter((e) => movedBetween(e, "Respondió", "Propuesta enviada")).length, closed: ownerEvents.filter((e) => movedBetween(e, "Reunión agendada", "Cerrado")).length };
+  });
   const topBlock = funnelMetrics.slice(1).reduce((prev, curr) => curr.rate < prev.rate ? curr : prev, funnelMetrics[1]);
 
   return <div className="page-content">
-    <div className="page-heading"><div><p className="eyebrow">Centro de control</p><h1>Buen día, equipo <span>👋</span></h1><p>Así viene el rendimiento comercial de Sincro.</p></div><div className="period-control">{(["hoy","semana","mes"] as const).map((p) => <button key={p} className={period === p ? "active" : ""} onClick={() => setPeriod(p)}>{p === "hoy" ? "Hoy" : p === "semana" ? "7 días" : "30 días"}</button>)}</div></div>
+    <div className="page-heading"><div><p className="eyebrow">Centro de control</p><h1>Buen día, equipo <span>👋</span></h1><p>Así viene el rendimiento comercial de Sincro.</p></div><div className="period-control">{(["hoy","semana","mes"] as const).map((p) => <button key={p} className={period === p ? "active" : ""} onClick={() => setPeriod(p)}>{p === "hoy" ? "24 horas" : p === "semana" ? "7 días" : "30 días"}</button>)}</div></div>
     <section className="metric-grid">{cards.map(({ label, value, icon: Icon, color, delta }) => <article className="metric-card" key={label}><div className={`metric-icon ${color}`}><Icon size={19}/></div><div className="metric-copy"><small>{label}</small><strong>{value}</strong><span className={delta.startsWith("+") ? "positive" : ""}>{delta.startsWith("+") && <ArrowUp size={12}/>} {delta}</span></div></article>)}</section>
     <section className="dashboard-grid">
       <article className="panel funnel-panel"><div className="panel-heading"><div><h2>Embudo de conversión</h2><p>Conversión desde la etapa anterior</p></div><button className="text-button" onClick={() => setPage("pipeline")}>Ver pipeline <ArrowDown size={14}/></button></div><div className="funnel">{funnelMetrics.map(({ label, value, rate, base, color }) => <div className="funnel-row" key={label}><div className="funnel-label"><span>{label}</span><strong>{value}</strong></div><div className="funnel-track"><div style={{ width: `${Math.max(rate, value ? 6 : 0)}%`, background: color }}><span>{rate}%</span></div></div><div className="stage-rate">{value} de {base} etapa anterior</div></div>)}</div></article>
       <article className="panel insight-panel"><div className="insight-icon"><Target size={21}/></div><p className="eyebrow">Lectura del embudo</p><h2>La mayor oportunidad está en<br/><span>{topBlock.label}</span></h2><p>Esta etapa concentra la caída más fuerte del período. Revisar el mensaje o material usado acá puede mejorar todo el cierre.</p><div className="insight-stat"><strong>{bases.closed ? Math.max(1, Math.round(bases.closed / Math.max(counts.closed, 1))) : 0}</strong><span>reuniones por cada<br/>cliente cerrado</span></div><button onClick={() => setPage("mensajes")}>Revisar mensajes <ArrowDown size={14}/></button></article>
-      <article className="panel activity-panel"><div className="panel-heading"><div><h2>Actividad reciente</h2><p>Últimos movimientos del equipo</p></div><Activity size={18}/></div><div className="activity-list">{activity.map((event) => { const lead = leadById.get(event.leadId); return <div className="activity-item" key={event.id}><div className="avatar mini">{initials(event.actor)}</div><div><p><strong>{event.actor.split("@")[0]}</strong> {eventLabels[event.type] ?? "actualizó a"} <b>{lead?.businessName ?? "un prospecto"}</b></p><small>{relativeTime(event.createdAt)}</small></div><span className="activity-dot" style={{ background: stageMeta[event.toStatus ?? "Pendiente"]?.color }}/></div>; })}</div></article>
+      <article className="panel activity-panel"><div className="panel-heading"><div><h2>Actividad reciente</h2><p>Últimos movimientos del período</p></div><Activity size={18}/></div><div className="activity-list">{activity.map((event) => { const lead = leadById.get(event.leadId); const owner = ownerFromEvent(event); return <div className="activity-item" key={event.id}><div className="avatar mini">{initials(owner)}</div><div><p><strong>{owner}</strong> {eventLabels[event.type] ?? "actualizó a"} <b>{lead?.businessName ?? "un prospecto"}</b></p><small>{relativeTime(event.createdAt)}</small></div><span className="activity-dot" style={{ background: stageMeta[event.toStatus ?? "Pendiente"]?.color ?? stageMeta.Pendiente.color }}/></div>; })}{!activity.length&&<p className="panel-empty">Sin movimientos en este período.</p>}</div></article>
       <article className="panel team-panel"><div className="panel-heading"><div><h2>Rendimiento del equipo</h2><p>Actividad en el período</p></div><Users size={18}/></div><div className="team-table"><div className="team-row header"><span>Responsable</span><span>Contactos</span><span>Propuestas</span><span>Cierres</span></div>{team.map((m) => <div className="team-row" key={m.owner}><span><div className="avatar tiny">{initials(m.owner)}</div>{m.owner}</span><strong>{m.contacts}</strong><strong>{m.proposals}</strong><strong>{m.closed}</strong></div>)}</div></article>
     </section>
   </div>;
@@ -284,34 +293,46 @@ CIERRE - agendar demo
 Excelente. Te propongo algo simple: hacemos una demo de 15 minutos, te muestro cómo quedaría en {{negocio}} y si no ves valor real, lo dejamos ahí. ¿Hoy o mañana?`;
 
 const objectionFlowBody = `OBJECIÓN: "No estoy interesado"
-Te entiendo. Para cerrar bien y no insistirte de más: ¿no te interesa porque ya lo tienen resuelto, por presupuesto o porque ahora no es prioridad?
+Te entiendo. Para no insistirte sin sentido: ¿es porque ya lo tienen resuelto, porque ahora no es prioridad o porque no viste claro el valor? Si es lo último, te muestro una demo de 10 minutos y lo evaluás con algo concreto.
 
 OBJECIÓN: "Es caro / no hay presupuesto"
-Tiene sentido cuidar el presupuesto. La pregunta sería si hoy están perdiendo más por turnos no respondidos, ausencias o tiempo del equipo contestando mensajes. Si querés, en 10 minutos calculamos si tiene sentido económico antes de hablar de precio.
+Tiene sentido cuidar el presupuesto. Antes de hablar de precio, aislemos si hay negocio: si el sistema les ahorra horas de WhatsApp, reduce turnos perdidos y ordena reservas 24 hs, ¿el problema sería el monto total o encontrar una forma de implementarlo sin afectar caja?
 
 OBJECIÓN: "No tengo tiempo"
-Justamente apunta a eso. No te propongo una reunión larga: te muestro una demo de 10 minutos y decidís si vale la pena seguir. Si no te ahorra tiempo, no avanzamos.
+Te entiendo, y justamente por eso te escribo. No te propongo una reunión larga: dame 10 minutos, te muestro cómo quedaría el agendamiento automático en {{negocio}} y si no ves ahorro de tiempo real, lo dejamos ahí.
 
 OBJECIÓN: "Ahora no"
-Dale. Para ubicarme: ¿"ahora no" es esta semana, este mes o este trimestre? Así no te persigo al pedo y te escribo cuando tenga sentido.
+Entiendo. Para ordenarme y no molestarte de más: cuando decís "ahora no", ¿es por tiempo, por presupuesto o porque todavía no es una prioridad? Si es timing, te escribo en la fecha correcta; si es otra cosa, lo resolvemos en una demo corta.
 
 OBJECIÓN: "Ya tenemos alguien que responde"
 Perfecto. Esto no reemplaza a la persona: le saca lo repetitivo. La persona puede enfocarse en vender, resolver casos especiales o atender mejor, mientras el sistema toma datos, confirma y ordena turnos.
 
 OBJECIÓN: "Mis clientes prefieren escribir"
-Totalmente, por eso no les sacamos WhatsApp. La idea es que puedan escribir igual, pero que el sistema los guíe a reservar sin esperar a que alguien esté libre para responder.
+Totalmente, por eso no les sacamos WhatsApp. El cliente puede escribir igual, pero en vez de esperar respuesta, el sistema lo guía para reservar, dejar sus datos y confirmar el turno en el momento.
 
 OBJECIÓN: "Ya probé algo parecido y no funcionó"
-Te creo. Normalmente falla cuando es genérico o le pide demasiado al cliente. Lo que hacemos es armarlo sobre el flujo real del negocio. Si querés, revisamos qué falló y te digo honestamente si tiene sentido intentarlo de nuevo.
+Te creo. Normalmente falla cuando es genérico, confuso o no respeta cómo compra el cliente. Nosotros lo armamos sobre el flujo real de {{negocio}}. Si querés, revisamos qué falló y te digo honestamente si vale la pena intentarlo de nuevo.
 
 OBJECIÓN: "Hablame más adelante"
-Obvio. ¿Te parece que te escriba el martes que viene o preferís que lo dejemos para principio de mes? Así queda ordenado y no te mando mensajes al azar.
+Obvio. Para hacerlo prolijo: ¿te parece que te escriba la semana que viene o preferís que lo dejemos para principio de mes? Así te contacto cuando tenga sentido y no te lleno de mensajes.
 
 OBJECIÓN: "No quiero cambiar mi forma de trabajar"
 Está bien. La idea no es cambiar lo que ya funciona, sino automatizar lo repetido. Si hoy contestan 30 veces lo mismo, el sistema toma esa parte y ustedes mantienen el control.
 
+OBJECIÓN: "Tengo que hablarlo con el dueño / socio"
+Perfecto, tiene sentido que lo vea quien decide. Para que no tengas que explicarlo de cero, ¿te parece si hacemos una demo corta con esa persona y le mostramos cómo quedaría aplicado a {{negocio}}?
+
+OBJECIÓN: "Ya tengo página web"
+Genial, eso suma. No hace falta reemplazarla: podemos integrar el sistema de turnos dentro de la web actual. Y si la web no convierte bien, también podemos mejorarla o armar una nueva.
+
+OBJECIÓN: "Ya uso una app / sistema"
+Buenísimo, entonces ya valoran ordenar la agenda. Te hago una pregunta puntual: ¿los clientes realmente reservan solos ahí o igual terminan escribiendo por WhatsApp para consultar horarios, confirmar o reprogramar?
+
+OBJECIÓN: "Mandame info"
+Sí, te mando. Para que no sea algo genérico: ¿hoy qué les pesa más, responder tarde, ordenar horarios, reducir ausencias o liberar tiempo del equipo? Con eso te paso un ejemplo más parecido a {{negocio}}.
+
 RESPUESTA CORTANTE: "No gracias"
-Gracias por responder. Te dejo tranquilo entonces. Si más adelante quieren que los turnos se reserven solos desde WhatsApp o web, escribime y te muestro un ejemplo.`;
+Gracias por responder. Te dejo tranquilo entonces. Si más adelante quieren que los turnos se reserven solos desde WhatsApp o desde la web, escribime y te muestro un ejemplo sin compromiso.`;
 
 const followUpFlowBody = `FOLLOW UP 1 - no respondió al filtro
 Te consulto de nuevo por si se perdió el mensaje: ¿los turnos de {{negocio}} los toman por WhatsApp o usan otro sistema?
@@ -383,8 +404,8 @@ function Messages({ templates, api, refresh }: { templates:Template[]; api:(p:Re
   function editTemplate(t:Template){setEditingId(t.id.startsWith("suggested_")?null:t.id);setForm({name:t.name,channel:t.channel,stage:t.stage,body:t.body});setFormError("");setModalOpen(true);}
   async function save(){if(!form.name.trim()||!form.body.trim()){setFormError("Completá el nombre y el flujo.");return;}setBusy(true);setFormError("");try{await api({action:editingId?"updateTemplate":"saveTemplate",templateId:editingId,template:form});setModalOpen(false);setEditingId(null);setForm(emptyForm);await refresh();}catch(e){setFormError(e instanceof Error?e.message:"No se pudo guardar el flujo");}finally{setBusy(false);}}
   async function remove(t:Template){if(!window.confirm(`¿Eliminar el flujo "${t.name}"? Esta acción no se puede deshacer.`))return;setDeletingId(t.id);try{await api({action:"deleteTemplate",templateId:t.id});await refresh();}catch(e){window.alert(e instanceof Error?e.message:"No se pudo eliminar el flujo");}finally{setDeletingId("");}}
-  const savedFlowNames = new Set(templates.map((t)=>t.name.trim().toLowerCase()));
-  const visibleSuggestions = suggestedFlows.filter((flow)=>!savedFlowNames.has(flow.name.trim().toLowerCase()));
+  const savedFlowBodiesByName = new Map(templates.map((t)=>[t.name.trim().toLowerCase(), t.body.trim()]));
+  const visibleSuggestions = suggestedFlows.filter((flow)=>savedFlowBodiesByName.get(flow.name.trim().toLowerCase()) !== flow.body.trim());
   return <div className="page-content"><div className="page-heading"><div><p className="eyebrow">Biblioteca compartida</p><h1>Flujos de conversación</h1><p>Guiones por etapa con caminos posibles según lo que responde cada prospecto.</p></div><button className="primary-button" onClick={createTemplate}><Plus size={17}/> Nuevo flujo</button></div>{visibleSuggestions.length>0&&<section className="flow-suggestions"><div className="panel-heading"><div><h2>Flujos sugeridos</h2><p>Base editable para que el equipo tenga una guía común.</p></div></div><div className="template-grid">{visibleSuggestions.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} suggested edit={editTemplate} copy={copy} copyBlock={copyBlock}/>)}</div></section>}<div className="template-grid">{templates.map((t)=><FlowCard key={t.id} template={t} copied={copied} deletingId={deletingId} edit={editTemplate} remove={remove} copy={copy} copyBlock={copyBlock}/>)}</div>{!templates.length&&!visibleSuggestions.length&&<div className="empty-state"><MessageSquareText/><h3>No hay flujos</h3><p>Creá un flujo para empezar a ordenar las conversaciones del equipo.</p></div>}{modalOpen&&<div className="modal-backdrop" onMouseDown={closeModal}><div className="modal-card template-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">Biblioteca</p><h2>{editingId?"Editar flujo":"Nuevo flujo"}</h2></div><button className="icon-button" onClick={closeModal} disabled={busy}><X/></button></div><label>Nombre<input autoFocus value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ej: Flujo para agendamiento automático"/></label><div className="form-row"><label>Canal<select value={form.channel} onChange={(e)=>setForm({...form,channel:e.target.value})}><option>WhatsApp</option><option>Email</option></select></label><label>Etapa<select value={form.stage} onChange={(e)=>setForm({...form,stage:e.target.value})}>{stages.map((s)=><option key={s}>{s}</option>)}</select></label></div><label>Flujo<textarea value={form.body} onChange={(e)=>setForm({...form,body:e.target.value})} rows={12} placeholder={"MSJ 1\nBuenas, ¿cómo va?\n\nSI RESPONDE: Me interesa\nAgendar reunión breve..."} /></label>{formError&&<p className="form-error">{formError}</p>}<div className="modal-actions"><button className="secondary-button" onClick={closeModal} disabled={busy}>Cancelar</button><button className="primary-button" onClick={()=>void save()} disabled={busy}>{busy&&<LoaderCircle className="spin" size={16}/>} {editingId?"Guardar cambios":"Crear flujo"}</button></div></div></div>}</div>;
 }
 
