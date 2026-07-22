@@ -317,25 +317,55 @@ CIERRE - agendar demo
 Excelente. Te propongo algo simple: hacemos una demo de 15 minutos, te muestro cómo quedaría en {{negocio}} y si no ves valor real, lo dejamos ahí. ¿Hoy o mañana?`;
 
 const objectionFlowBody = `OBJECIÓN: "No estoy interesado"
-Te entiendo. Para no insistirte sin sentido: ¿es porque ya lo tienen resuelto, porque ahora no es prioridad o porque no viste claro el valor? Si es lo último, te muestro una demo de 10 minutos y lo evaluás con algo concreto.
+Te entiendo. Para no insistirte sin sentido: ¿no te interesa porque ya lo tienen resuelto, porque ahora no es prioridad o porque no viste claro el valor? Si es lo último, te muestro una demo de 10 minutos aplicada a {{negocio}} y lo evaluás con algo concreto.
 
 OBJECIÓN: "Es caro / no hay presupuesto"
-Tiene sentido cuidar el presupuesto. Antes de hablar de precio, aislemos si hay negocio: si el sistema les ahorra horas de WhatsApp, reduce turnos perdidos y ordena reservas 24 hs, ¿el problema sería el monto total o encontrar una forma de implementarlo sin afectar caja?
+Tiene sentido cuidar el presupuesto. Antes de hablar de precio, aislemos si hay negocio: si esto les ahorra horas de WhatsApp, reduce turnos perdidos y ordena reservas 24 hs, ¿el problema sería el valor total o encontrar una forma de implementarlo sin afectar caja?
+
+RESPUESTA SI INSISTE CON PRECIO
+Te entiendo. La pregunta clave es cuánto les cuesta hoy no resolverlo: turnos que se pierden por responder tarde, ausencias sin recordatorio y tiempo del equipo contestando lo mismo. Si en la demo no vemos que el ahorro supera el costo, no avanzamos.
+
+OBJECIÓN: "Lo tengo que pensar"
+Obvio, tiene sentido pensarlo. Para ayudarte a decidir con información y no con duda: ¿qué parte te queda poco clara, el funcionamiento, el precio, la implementación o si tus clientes lo usarían?
+
+RESPUESTA SI DICE "Después lo veo"
+Dale. Solo para separar tiempo de decisión: si la demo te muestra que el sistema funciona para {{negocio}} y resuelve el problema, ¿estarías dispuesto a avanzar o hay otra cosa que te frenaría?
+
+OBJECIÓN: "Tengo que hablarlo con mi socio / pareja"
+Perfecto, tiene sentido que lo vea quien decide con vos. ¿Qué creés que le preocuparía más: precio, implementación, que los clientes lo usen o cambiar la forma de trabajar? Así lo resolvemos antes de la reunión.
+
+RESPUESTA PARA INVOLUCRAR AL SOCIO / DUEÑO
+Para que no tengas que explicarlo vos de cero, armemos una demo corta con esa persona. Le mostramos cómo quedaría aplicado a {{negocio}}, qué problema resuelve y cuánto trabajo les sacaría. ¿Te sirve coordinar 15 minutos?
 
 OBJECIÓN: "No tengo tiempo"
 Te entiendo, y justamente por eso te escribo. No te propongo una reunión larga: dame 10 minutos, te muestro cómo quedaría el agendamiento automático en {{negocio}} y si no ves ahorro de tiempo real, lo dejamos ahí.
 
+RESPUESTA SI ESTÁ APURADO
+Te lo resumo en una línea: el cliente entra, elige horario, deja sus datos y el turno queda confirmado sin que ustedes respondan manualmente cada mensaje. Si eso te sirve, hacemos demo de 10 minutos; si no, lo dejamos acá.
+
 OBJECIÓN: "Ahora no"
 Entiendo. Para ordenarme y no molestarte de más: cuando decís "ahora no", ¿es por tiempo, por presupuesto o porque todavía no es una prioridad? Si es timing, te escribo en la fecha correcta; si es otra cosa, lo resolvemos en una demo corta.
+
+OBJECIÓN: "No es prioridad"
+Te entiendo. Te hago una pregunta simple: si en los próximos 3 meses siguen tomando turnos igual que hoy, ¿qué es lo peor que pasa: más tiempo perdido, clientes sin respuesta, errores de agenda o nada importante? Si no hay dolor real, probablemente no tenga sentido avanzar.
 
 OBJECIÓN: "Ya tenemos alguien que responde"
 Perfecto. Esto no reemplaza a la persona: le saca lo repetitivo. La persona puede enfocarse en vender, resolver casos especiales o atender mejor, mientras el sistema toma datos, confirma y ordena turnos.
 
+RESPUESTA SI DICE "Prefiero atención humana"
+Totalmente, y está bien mantener atención humana para casos importantes. La idea es que la persona no esté respondiendo 40 veces horarios, dirección, disponibilidad y confirmaciones. Lo repetido lo toma el sistema; lo importante queda para ustedes.
+
 OBJECIÓN: "Mis clientes prefieren escribir"
 Totalmente, por eso no les sacamos WhatsApp. El cliente puede escribir igual, pero en vez de esperar respuesta, el sistema lo guía para reservar, dejar sus datos y confirmar el turno en el momento.
 
+RESPUESTA SI TEME QUE EL CLIENTE NO LO USE
+Tiene sentido esa duda. Por eso no cambiamos el hábito del cliente: si hoy escribe por WhatsApp, sigue escribiendo por WhatsApp. Solo hacemos que el camino para reservar sea más claro y rápido.
+
 OBJECIÓN: "Ya probé algo parecido y no funcionó"
 Te creo. Normalmente falla cuando es genérico, confuso o no respeta cómo compra el cliente. Nosotros lo armamos sobre el flujo real de {{negocio}}. Si querés, revisamos qué falló y te digo honestamente si vale la pena intentarlo de nuevo.
+
+RESPUESTA SI TUVO MALA EXPERIENCIA
+Justamente por eso preferimos mostrar demo antes de venderte nada. Vemos qué probaron, dónde se trabó y si este enfoque lo resuelve. Si vemos que va a repetir el mismo problema, te lo digo directo.
 
 OBJECIÓN: "Hablame más adelante"
 Obvio. Para hacerlo prolijo: ¿te parece que te escriba la semana que viene o preferís que lo dejemos para principio de mes? Así te contacto cuando tenga sentido y no te lleno de mensajes.
@@ -343,17 +373,53 @@ Obvio. Para hacerlo prolijo: ¿te parece que te escriba la semana que viene o pr
 OBJECIÓN: "No quiero cambiar mi forma de trabajar"
 Está bien. La idea no es cambiar lo que ya funciona, sino automatizar lo repetido. Si hoy contestan 30 veces lo mismo, el sistema toma esa parte y ustedes mantienen el control.
 
-OBJECIÓN: "Tengo que hablarlo con el dueño / socio"
-Perfecto, tiene sentido que lo vea quien decide. Para que no tengas que explicarlo de cero, ¿te parece si hacemos una demo corta con esa persona y le mostramos cómo quedaría aplicado a {{negocio}}?
+RESPUESTA SI LE DA MIEDO IMPLEMENTARLO
+Lo entiendo. Por eso lo pensamos como una mejora gradual, no como cambiar todo de golpe. Primero dejamos armado el flujo principal de reservas; después ustedes deciden cuánto automatizar y cuánto mantener manual.
 
 OBJECIÓN: "Ya tengo página web"
 Genial, eso suma. No hace falta reemplazarla: podemos integrar el sistema de turnos dentro de la web actual. Y si la web no convierte bien, también podemos mejorarla o armar una nueva.
 
+RESPUESTA SI LA WEB YA FUNCIONA
+Buenísimo. Entonces no tocaría lo que ya funciona. La oportunidad sería sumar una reserva más directa: que quien entra a la web pueda agendar sin escribir, esperar respuesta o perderse en el camino.
+
 OBJECIÓN: "Ya uso una app / sistema"
 Buenísimo, entonces ya valoran ordenar la agenda. Te hago una pregunta puntual: ¿los clientes realmente reservan solos ahí o igual terminan escribiendo por WhatsApp para consultar horarios, confirmar o reprogramar?
 
+RESPUESTA SI LA APP YA RESUELVE TODO
+Perfecto, si la gente agenda sola, reprograma fácil y ustedes no dependen de WhatsApp, probablemente ya lo tengan bastante resuelto. En ese caso no te vendería algo innecesario. Si querés, solo revisamos si hay algún punto flojo.
+
+OBJECIÓN: "Ya tengo proveedor"
+Me alegra, eso quiere decir que ya le dan valor a ordenar el proceso. No te propongo cambiar por cambiar. Te propongo ver si podemos mejorar una parte específica: reservas 24 hs, recordatorios, integración con web o menos mensajes manuales.
+
+RESPUESTA SI ESTÁ CONTENTO CON SU PROVEEDOR
+Buenísimo. Entonces mirémoslo como segunda opción o mejora puntual, no como reemplazo. Si en 10 minutos no ves una diferencia concreta para {{negocio}}, no seguimos.
+
 OBJECIÓN: "Mandame info"
 Sí, te mando. Para que no sea algo genérico: ¿hoy qué les pesa más, responder tarde, ordenar horarios, reducir ausencias o liberar tiempo del equipo? Con eso te paso un ejemplo más parecido a {{negocio}}.
+
+RESPUESTA PARA PEDIR DATO ANTES DE MANDAR INFO
+Te mando algo corto. Para enfocarlo bien: ¿hoy toman turnos por WhatsApp, Instagram, llamada, web o una app? Con eso te paso un ejemplo que tenga sentido para {{negocio}}.
+
+OBJECIÓN: "No entiendo bien qué hacen"
+Simple: armamos un sistema para que tus clientes puedan reservar turno las 24 hs desde WhatsApp o web. El sistema muestra horarios, toma datos, confirma y puede enviar recordatorios, sin que ustedes tengan que contestar cada mensaje manualmente.
+
+OBJECIÓN: "¿Esto es inteligencia artificial?"
+Puede tener IA si hace falta, pero no dependemos de vender humo. La base es un flujo claro de reservas: horarios, datos, confirmación y recordatorios. Si después conviene sumar IA para responder preguntas frecuentes, se integra.
+
+OBJECIÓN: "Mis clientes son grandes / no tecnológicos"
+Tiene sentido. Por eso lo hacemos simple: nada raro, nada de pasos largos. El cliente escribe o entra a un link, elige horario y confirma. Si hoy pueden mandar WhatsApp, pueden usar este flujo.
+
+OBJECIÓN: "No quiero pagar algo todos los meses"
+Te entiendo. La pregunta es si el sistema se paga solo con el tiempo que libera y los turnos que evita perder. Si no hay retorno claro, no tiene sentido. Por eso primero vemos números simples en una demo.
+
+OBJECIÓN: "Tengo miedo de que falle"
+Es lógico. Por eso el sistema se prueba antes, se arranca con un flujo controlado y ustedes mantienen la posibilidad de intervenir manualmente. No se trata de perder control, sino de ordenar lo repetido.
+
+OBJECIÓN: "No quiero que parezca robot"
+Totalmente. El flujo se escribe con el tono de {{negocio}}, no como mensaje genérico. La idea es que sea claro, rápido y natural, manteniendo la opción de que una persona intervenga cuando haga falta.
+
+OBJECIÓN: "No sé si me sirve para mi rubro"
+Puede ser. Por eso no te lo vendería sin verlo. Hagamos una demo aplicada a {{rubro}} y en 10 minutos queda claro si encaja o no. Si no encaja, lo descartamos sin compromiso.
 
 RESPUESTA CORTANTE: "No gracias"
 Gracias por responder. Te dejo tranquilo entonces. Si más adelante quieren que los turnos se reserven solos desde WhatsApp o desde la web, escribime y te muestro un ejemplo sin compromiso.`;
