@@ -291,6 +291,49 @@ export async function POST(request: Request) {
       return Response.json({ leads: updated.map(fromLead) });
     }
 
+    if (payload.action === "updateLead") {
+      const leadId = String(payload.leadId ?? "").trim();
+      if (!leadId) return Response.json({ error: "Prospecto no encontrado" }, { status: 404 });
+      const params = new URLSearchParams({ select: "*", id: `eq.${leadId}`, limit: "1" });
+      const [current] = await supabase<DbLead[]>(`leads?${params.toString()}`);
+      if (!current) return Response.json({ error: "Prospecto no encontrado" }, { status: 404 });
+      const input = payload.lead ?? {};
+      const businessName = String(input.businessName ?? current.business_name).trim();
+      const email = String(input.email ?? current.email).trim().toLowerCase();
+      const phone = String(input.phone ?? current.phone).replace(/\D/g, "");
+      if (!businessName || (!email && !phone)) return Response.json({ error: "Ingresa el negocio y al menos un email o telefono." }, { status: 400 });
+      const status = cleanStatus(input.status ?? current.status);
+      const updateParams = new URLSearchParams({ id: `eq.${leadId}` });
+      const [updated] = await supabase<DbLead[]>(`leads?${updateParams.toString()}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          business_name: businessName,
+          email,
+          phone,
+          segment: String(input.segment ?? current.segment).trim() || "General",
+          owner: cleanOwner(input.owner ?? current.owner, current.owner),
+          status,
+          priority: String(input.priority ?? current.priority).trim() || "Media",
+          batch: String(input.batch ?? current.batch).trim(),
+          notes: String(input.notes ?? current.notes).trim(),
+          next_follow_up: input.nextFollowUp ? String(input.nextFollowUp) : current.next_follow_up,
+          updated_at: now,
+        }),
+      });
+      let createdEvent: DbEvent | null = null;
+      if (current.status !== status) {
+        const event = { id: id("evt"), lead_id: current.id, type: eventType(status), from_status: current.status, to_status: status, actor, note: "Estado actualizado al editar prospecto", created_at: now };
+        const [eventRow] = await supabase<DbEvent[]>("events", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify(event),
+        });
+        createdEvent = eventRow;
+      }
+      return Response.json({ lead: fromLead(updated), event: createdEvent ? fromEvent(createdEvent) : null });
+    }
+
     if (payload.action === "deleteLead") {
       const leadId = String(payload.leadId ?? "");
       if (!leadId) return Response.json({ error: "Prospecto no encontrado" }, { status: 404 });
