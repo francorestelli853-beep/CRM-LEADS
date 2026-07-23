@@ -70,3 +70,12 @@ test("Sincro Obra has copyable proposal and follow-up flows", async () => {
   assert.match(app, /slice\(start-1,end-1\)/);
   assert.match(app, /El final no se incluye/);
 });
+
+test("prospects can be filtered by status and segment together", async () => {
+  const app = await readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8");
+  assert.match(app, /aria-label="Filtrar por estado"/);
+  assert.match(app, /aria-label="Filtrar por rubro"/);
+  assert.match(app, /Todos los rubros/);
+  assert.match(app, /status === "Todos" \|\| l\.status === status/);
+  assert.match(app, /normalizedStatus\(l\.segment\) === normalizedStatus\(segmentFilter\)/);
+});
