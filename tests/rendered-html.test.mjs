@@ -79,3 +79,17 @@ test("prospects can be filtered by status and segment together", async () => {
   assert.match(app, /status === "Todos" \|\| l\.status === status/);
   assert.match(app, /normalizedStatus\(l\.segment\) === normalizedStatus\(segmentFilter\)/);
 });
+
+test("prospects expose an inline persistent next step", async () => {
+  const [app, route] = await Promise.all([
+    readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/crm/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(app, /<th>Próximo paso<\/th>/);
+  assert.match(app, /<NextStepCell key=.* lead=\{lead\} save=\{updateLead\}\/>/);
+  assert.match(app, /nextFollowUp:next/);
+  assert.match(app, /Enter o salir para guardar/);
+  assert.match(route, /next_follow_up: input\.nextFollowUp === undefined/);
+  assert.match(route, /String\(input\.nextFollowUp \?\? ""\)\.trim\(\) \|\| null/);
+});

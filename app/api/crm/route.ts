@@ -378,7 +378,7 @@ export async function POST(request: Request) {
           priority: String(input.priority ?? current.priority).trim() || "Media",
           batch: String(input.batch ?? current.batch).trim(),
           notes: String(input.notes ?? current.notes).trim(),
-          next_follow_up: input.nextFollowUp ? String(input.nextFollowUp) : current.next_follow_up,
+          next_follow_up: input.nextFollowUp === undefined ? current.next_follow_up : String(input.nextFollowUp ?? "").trim() || null,
           updated_at: now,
         }),
       });
