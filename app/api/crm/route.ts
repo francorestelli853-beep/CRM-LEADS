@@ -247,8 +247,35 @@ function sourceFor(workspace: unknown, fallback: "Manual" | "Excel") {
   return workspace === "obra" ? SINCRO_OBRA_SOURCE : fallback;
 }
 
+async function proxyToConfiguredBackend(request: Request) {
+  const backendUrl = env("CRM_BACKEND_URL").replace(/\/$/, "");
+  if (!backendUrl) return null;
+
+  const requestUrl = new URL(request.url);
+  const response = await fetch(`${backendUrl}/api/crm${requestUrl.search}`, {
+    method: request.method,
+    headers: {
+      "Content-Type": request.headers.get("content-type") || "application/json",
+      "X-CRM-Actor": request.headers.get("x-crm-actor") || "",
+    },
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : await request.text(),
+    cache: "no-store",
+  });
+  const body = await response.text();
+  return new Response(body, {
+    status: response.status,
+    headers: {
+      "Content-Type": response.headers.get("content-type") || "application/json",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function GET(request: Request) {
   try {
+    const proxied = await proxyToConfiguredBackend(request);
+    if (proxied) return proxied;
+
     const actor = actorFrom(request);
     const [leadRows, eventRows, templateRows] = await Promise.all([
       supabase<DbLead[]>("leads?select=*&order=updated_at.desc"),
@@ -268,6 +295,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const proxied = await proxyToConfiguredBackend(request);
+    if (proxied) return proxied;
+
     const actor = actorFrom(request);
     const payload = await request.json() as CrmPayload;
     const now = new Date().toISOString();
