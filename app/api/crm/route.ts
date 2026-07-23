@@ -1,3 +1,5 @@
+import { SINCRO_OBRA_SOURCE, sincroObraSeeds } from "../../sincro-obra-data";
+
 type LeadStatus =
   | "Pendiente"
   | "Contactado"
@@ -59,6 +61,27 @@ type LeadInput = {
   batch?: unknown;
   notes?: unknown;
   nextFollowUp?: unknown;
+};
+
+type TemplateInput = {
+  name?: unknown;
+  channel?: unknown;
+  stage?: unknown;
+  body?: unknown;
+};
+
+type CrmPayload = {
+  action?: unknown;
+  lead?: LeadInput;
+  leadId?: unknown;
+  leadIds?: unknown;
+  leads?: unknown;
+  note?: unknown;
+  owner?: unknown;
+  status?: unknown;
+  template?: TemplateInput;
+  templateId?: unknown;
+  workspace?: unknown;
 };
 
 const responsibleOwners = ["Franco", "Trezza", "Laucha"];
@@ -193,7 +216,7 @@ function fromTemplate(row: DbTemplate) {
   };
 }
 
-function toLead(input: LeadInput, actor: string, source: "Manual" | "Excel", now: string) {
+function toLead(input: LeadInput, actor: string, source: string, now: string) {
   const businessName = String(input.businessName ?? "").trim();
   const email = String(input.email ?? "").trim().toLowerCase();
   const phone = String(input.phone ?? "").replace(/\D/g, "");
@@ -214,6 +237,14 @@ function toLead(input: LeadInput, actor: string, source: "Manual" | "Excel", now
     created_at: now,
     updated_at: now,
   };
+}
+
+function isSincroObraSource(source: unknown) {
+  return String(source ?? "").trim() === SINCRO_OBRA_SOURCE;
+}
+
+function sourceFor(workspace: unknown, fallback: "Manual" | "Excel") {
+  return workspace === "obra" ? SINCRO_OBRA_SOURCE : fallback;
 }
 
 export async function GET(request: Request) {
@@ -238,11 +269,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const actor = actorFrom(request);
-    const payload = await request.json() as Record<string, any>;
+    const payload = await request.json() as CrmPayload;
     const now = new Date().toISOString();
 
     if (payload.action === "create") {
-      const lead = toLead(payload.lead ?? {}, actor, "Manual", now);
+      const lead = toLead(payload.lead ?? {}, actor, sourceFor(payload.workspace, "Manual"), now);
       if (!lead) return Response.json({ error: "Ingresa el negocio y al menos un email o telefono." }, { status: 400 });
       const [created] = await supabase<DbLead[]>("leads", {
         method: "POST",
@@ -352,12 +383,15 @@ export async function POST(request: Request) {
 
     if (payload.action === "import") {
       const incoming = Array.isArray(payload.leads) ? payload.leads.slice(0, 2000) : [];
-      const existing = await supabase<Array<{ email: string; phone: string }>>("leads?select=email,phone");
+      const source = sourceFor(payload.workspace, "Excel");
+      const obraWorkspace = isSincroObraSource(source);
+      const existingRows = await supabase<Array<{ email: string; phone: string; source: string }>>("leads?select=email,phone,source");
+      const existing = existingRows.filter((row) => isSincroObraSource(row.source) === obraWorkspace);
       const keys = new Set(existing.flatMap((row) => [row.email && `e:${row.email.toLowerCase()}`, row.phone && `p:${row.phone}`]).filter(Boolean));
       const accepted = [];
       let skipped = 0;
       for (const item of incoming) {
-        const lead = toLead(item, actor, "Excel", now);
+        const lead = toLead(item, actor, source, now);
         if (!lead || (lead.email && keys.has(`e:${lead.email}`)) || (lead.phone && keys.has(`p:${lead.phone}`))) {
           skipped++;
           continue;
@@ -375,10 +409,41 @@ export async function POST(request: Request) {
         await supabase("events", {
           method: "POST",
           headers: { Prefer: "return=minimal" },
-          body: JSON.stringify(accepted.map((lead) => ({ id: id("evt"), lead_id: lead.id, type: "created", from_status: null, to_status: lead.status, actor, note: "Importado desde Excel", created_at: now }))),
+          body: JSON.stringify(accepted.map((lead) => ({ id: id("evt"), lead_id: lead.id, type: "created", from_status: null, to_status: lead.status, actor, note: obraWorkspace ? "Importado a Sincro Obra desde Excel" : "Importado desde Excel", created_at: now }))),
         });
       }
       return Response.json({ added: accepted.length, skipped });
+    }
+
+    if (payload.action === "seedSincroObra") {
+      const params = new URLSearchParams({ select: "email,phone", source: `eq.${SINCRO_OBRA_SOURCE}` });
+      const existing = await supabase<Array<{ email: string; phone: string }>>(`leads?${params.toString()}`);
+      const keys = new Set(existing.flatMap((row) => [row.email && `e:${row.email.toLowerCase()}`, row.phone && `p:${row.phone}`]).filter(Boolean));
+      const accepted = [];
+      let skipped = 0;
+      for (const item of sincroObraSeeds) {
+        const lead = toLead(item, "Franco", SINCRO_OBRA_SOURCE, now);
+        if (!lead || (lead.email && keys.has(`e:${lead.email}`)) || (lead.phone && keys.has(`p:${lead.phone}`))) {
+          skipped++;
+          continue;
+        }
+        if (lead.email) keys.add(`e:${lead.email}`);
+        if (lead.phone) keys.add(`p:${lead.phone}`);
+        accepted.push(lead);
+      }
+      if (accepted.length) {
+        await supabase("leads", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(accepted),
+        });
+        await supabase("events", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(accepted.map((lead) => ({ id: id("evt"), lead_id: lead.id, type: "created", from_status: null, to_status: lead.status, actor: "Franco", note: "Base inicial de Sincro Obra", created_at: now }))),
+        });
+      }
+      return Response.json({ added: accepted.length, skipped, total: sincroObraSeeds.length });
     }
 
     if (payload.action === "saveTemplate") {
