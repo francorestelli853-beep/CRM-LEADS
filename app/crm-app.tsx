@@ -166,13 +166,13 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
       </aside>
 
       <main className="main-area">
-        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={20}/></button><div className="top-actions"><button className="icon-button notification" aria-label="Notificaciones"><Clock3 size={18}/><span/></button><button className="primary-button" onClick={() => setAddWorkspace(page === "sincro-obra" ? "obra" : "crm")}><Plus size={18}/> Nuevo prospecto</button></div></header>
+        {page !== "contactos" && page !== "sincro-obra" && <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={20}/></button><div className="top-actions"><button className="icon-button notification" aria-label="Notificaciones"><Clock3 size={18}/><span/></button><button className="primary-button" onClick={() => setAddWorkspace("crm")}><Plus size={18}/> Nuevo prospecto</button></div></header>}
         {error && <div className="error-banner"><span>{error}</span><button onClick={() => { setError(""); void refresh(); }}>Reintentar</button></div>}
         {loading ? <Loading/> : <>
           {page === "resumen" && <Dashboard leads={crmLeads} events={crmEvents} now={metricNow} period={period} setPeriod={setPeriod} setPage={setPage}/>}
           {page === "pipeline" && <Pipeline leads={crmLeads} moveLead={moveLead}/>}
-          {page === "contactos" && <Contacts key="crm-prospects" leads={crmLeads} workspace="crm" moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("crm")}/>}
-          {page === "sincro-obra" && <Contacts key="obra-prospects" leads={obraLeads} workspace="obra" moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("obra")} onImport={() => { sessionStorage.setItem("crm-import-workspace", "obra"); setPage("importar"); }}/>}
+          {page === "contactos" && <Contacts key="crm-prospects" leads={crmLeads} workspace="crm" openMenu={() => setMenuOpen(true)} moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("crm")}/>}
+          {page === "sincro-obra" && <Contacts key="obra-prospects" leads={obraLeads} workspace="obra" openMenu={() => setMenuOpen(true)} moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("obra")} onImport={() => { sessionStorage.setItem("crm-import-workspace", "obra"); setPage("importar"); }}/>}
           {page === "importar" && <Importer api={api} refresh={refresh}/>} 
           {page === "mensajes" && <Messages templates={data.templates} api={api} refresh={refresh}/>} 
         </>}
@@ -247,7 +247,7 @@ function Pipeline({ leads, moveLead }: { leads: Lead[]; moveLead: (id:string,sta
   return <div className="page-content wide"><div className="page-heading"><div><p className="eyebrow">Flujo comercial</p><h1>Pipeline</h1><p>Mové cada oportunidad a medida que avanza.</p></div><label className="select-wrap"><Filter size={15}/><select value={filter} onChange={(e)=>setFilter(e.target.value)}>{owners.map((o)=><option key={o}>{o}</option>)}</select><ChevronDown size={14}/></label></div><div className="pipeline-board">{pipelineStages.map((stage) => { const stageLeads = visible.filter((l) => l.status === stage); return <section className="pipeline-column" key={stage} onDragOver={(e)=>e.preventDefault()} onDrop={()=>{ if(dragging) void moveLead(dragging,stage); setDragging(null); }}><header><div><span className="stage-dot" style={{background:stageMeta[stage].color}}/><strong>{stage}</strong></div><em>{stageLeads.length}</em></header><div className="pipeline-cards">{stageLeads.map((lead)=><article className="lead-card" draggable onDragStart={()=>setDragging(lead.id)} onDragEnd={()=>setDragging(null)} key={lead.id}><div className="lead-card-top"><span className={`priority ${lead.priority.toLowerCase()}`}>{lead.priority}</span><MoreHorizontal size={16}/></div><h3>{lead.businessName}</h3><p>{lead.segment}</p><div className="lead-contact">{lead.email ? <Mail size={14}/> : <Phone size={14}/>}<span>{lead.email || formatPhone(lead.phone)}</span></div><footer><div className="avatar tiny">{initials(lead.owner)}</div><span>{lead.owner}</span><small>{relativeTime(lead.updatedAt)}</small></footer><select aria-label={`Estado de ${lead.businessName}`} value={lead.status} onChange={(e)=>void moveLead(lead.id,e.target.value)}>{stages.map((s)=><option key={s}>{s}</option>)}</select></article>)}</div></section>; })}</div></div>;
 }
 
-function Contacts({ leads, workspace, moveLead, updateLead, updateLeadOwner, deleteLead, onAdd, onImport }: { leads: Lead[]; workspace:Workspace; moveLead:(id:string,status:string)=>void; updateLead:(id:string,lead:Partial<Lead>)=>Promise<void>; updateLeadOwner:(ids:string[],owner:string)=>void; deleteLead:(id:string)=>void; onAdd:()=>void; onImport?:()=>void }) {
+function Contacts({ leads, workspace, openMenu, moveLead, updateLead, updateLeadOwner, deleteLead, onAdd, onImport }: { leads: Lead[]; workspace:Workspace; openMenu:()=>void; moveLead:(id:string,status:string)=>void; updateLead:(id:string,lead:Partial<Lead>)=>Promise<void>; updateLeadOwner:(ids:string[],owner:string)=>void; deleteLead:(id:string)=>void; onAdd:()=>void; onImport?:()=>void }) {
   const [search, setSearch] = useState(""); const [status, setStatus] = useState("Todos"); const [segmentFilter, setSegmentFilter] = useState("__all__"); const [selected, setSelected] = useState<string[]>([]); const [bulkOwner, setBulkOwner] = useState(responsibleOwners[0]); const [copyMessage, setCopyMessage] = useState(""); const [range, setRange] = useState(""); const [rangeMessage, setRangeMessage] = useState(""); const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const segments = useMemo(() => { const unique = new Map<string,string>(); leads.forEach((lead) => { const label=lead.segment.trim(); if(label&&!unique.has(normalizedStatus(label))) unique.set(normalizedStatus(label),label); }); return [...unique.values()].sort((a,b)=>a.localeCompare(b,"es",{sensitivity:"base"})); }, [leads]);
   const hasUncategorized = leads.some((lead)=>!lead.segment.trim());
@@ -263,17 +263,37 @@ function Contacts({ leads, workspace, moveLead, updateLead, updateLeadOwner, del
     const match=range.trim().match(/^(\d+)\s*[-–—]\s*(\d+)$/);
     if(!match){setRangeMessage("Usá el formato 20-50");return;}
     const start=Number(match[1]); const end=Number(match[2]);
-    if(start<1||end<=start){setRangeMessage("El segundo número debe ser mayor al primero");return;}
-    const rangeIds=filtered.slice(start-1,end-1).map((l)=>l.id);
+    if(start<1||end<start){setRangeMessage("El segundo número no puede ser menor al primero");return;}
+    const rangeIds=filtered.slice(start-1,end).map((l)=>l.id);
     if(!rangeIds.length){setRangeMessage(`No hay prospectos desde el número ${start}`);return;}
     setSelected(rangeIds);
-    setRangeMessage(`${rangeIds.length} seleccionados · ${start}-${Math.min(end,filtered.length+1)}`);
+    setRangeMessage(`${rangeIds.length} seleccionados · ${start}-${Math.min(end,filtered.length)}`);
   }
   async function copyText(text:string, message:string){ if(!text){setCopyMessage("No hay teléfonos seleccionados.");return;} try{ await navigator.clipboard.writeText(text); setCopyMessage(message); } catch { const area=document.createElement("textarea"); area.value=text; document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove(); setCopyMessage(message); } window.setTimeout(()=>setCopyMessage(""),2600); }
   const phoneLines = selectedWithPhone.map((l)=>whatsappNumber(l.phone)).join("\n");
   const downloadWhatsApp = () => downloadText("whatsapp_seleccionados_sincro.txt",phoneLines);
   const obra = workspace === "obra";
-  return <div className="page-content">
+  return <div className="contacts-view">
+    <div className="contacts-sticky-bar">
+      <div className="table-toolbar">
+        <button className="icon-button mobile-menu contacts-menu" onClick={openMenu} aria-label="Abrir menú"><Menu size={20}/></button>
+        <label className="table-search"><Search size={17}/><input aria-label="Buscar negocio, email o teléfono" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label>
+        <label className="select-wrap"><Filter size={15}/><select aria-label="Filtrar por estado" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="Todos">Todos los estados</option>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label>
+        <label className="select-wrap"><BriefcaseBusiness size={15}/><select aria-label="Filtrar por rubro" value={segmentFilter} onChange={(e)=>setSegmentFilter(e.target.value)}><option value="__all__">Todos los rubros</option>{hasUncategorized&&<option value="__empty__">Sin rubro</option>}{segments.map((segment)=><option key={segment} value={segment}>{segment}</option>)}</select><ChevronDown size={14}/></label>
+        <button className="secondary-button export-button" onClick={()=>downloadCsv(filtered,workspace)}><Download size={16}/> Exportar CSV</button>
+      </div>
+      <div className="bulk-toolbar">
+        <div><strong>{selected.length ? `${selected.length} seleccionados` : "Seleccioná prospectos para trabajar en lote"}</strong><small>{selectedWithPhone.length} con teléfono listo para WhatsApp</small></div>
+        <div className="range-selector"><label htmlFor={`contact-range-${workspace}`}>Rango</label><input id={`contact-range-${workspace}`} value={range} onChange={(e)=>{setRange(e.target.value);setRangeMessage("");}} onKeyDown={(e)=>{if(e.key==="Enter")selectRange();}} placeholder="20-50" aria-describedby={`range-help-${workspace}`}/><button className="secondary-button compact" onClick={selectRange}>Seleccionar</button><small id={`range-help-${workspace}`}>Incluye el número final</small>{rangeMessage&&<em>{rangeMessage}</em>}</div>
+        <label className="select-wrap bulk-owner"><Users size={14}/><select value={bulkOwner} onChange={(e)=>setBulkOwner(e.target.value)}>{responsibleOwners.map((o)=><option key={o}>{o}</option>)}</select><ChevronDown size={14}/></label>
+        <button className="primary-button compact" disabled={!selected.length} onClick={()=>void updateLeadOwner(selected,bulkOwner)}>Asignar responsable</button>
+        <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={()=>void copyText(phoneLines,`Copiados ${selectedWithPhone.length} números de WhatsApp`)}><Copy size={14}/> Copiar WhatsApp</button>
+        <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={downloadWhatsApp}><Download size={14}/> TXT</button>
+        <button className="text-button clear-selection" disabled={!selected.length} onClick={()=>setSelected([])}>Limpiar</button>
+        {copyMessage&&<em>{copyMessage}</em>}
+      </div>
+    </div>
+    <div className="page-content">
     <div className="page-heading">
       <div>
         <p className="eyebrow">{obra ? "Base exclusiva de Franco" : "Base compartida"}</p>
@@ -286,22 +306,6 @@ function Contacts({ leads, workspace, moveLead, updateLead, updateLeadOwner, del
       </div>
     </div>
     <section className="panel contacts-panel">
-      <div className="table-toolbar">
-        <label className="table-search"><Search size={17}/><input aria-label="Buscar negocio, email o teléfono" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label>
-        <label className="select-wrap"><Filter size={15}/><select aria-label="Filtrar por estado" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="Todos">Todos los estados</option>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label>
-        <label className="select-wrap"><BriefcaseBusiness size={15}/><select aria-label="Filtrar por rubro" value={segmentFilter} onChange={(e)=>setSegmentFilter(e.target.value)}><option value="__all__">Todos los rubros</option>{hasUncategorized&&<option value="__empty__">Sin rubro</option>}{segments.map((segment)=><option key={segment} value={segment}>{segment}</option>)}</select><ChevronDown size={14}/></label>
-        <button className="secondary-button" onClick={()=>downloadCsv(filtered,workspace)}><Download size={16}/> Exportar CSV</button>
-      </div>
-      <div className="bulk-toolbar">
-        <div><strong>{selected.length ? `${selected.length} seleccionados` : "Seleccioná prospectos para trabajar en lote"}</strong><small>{selectedWithPhone.length} con teléfono listo para WhatsApp</small></div>
-        <div className="range-selector"><label htmlFor={`contact-range-${workspace}`}>Rango</label><input id={`contact-range-${workspace}`} value={range} onChange={(e)=>{setRange(e.target.value);setRangeMessage("");}} onKeyDown={(e)=>{if(e.key==="Enter")selectRange();}} placeholder="20-50" aria-describedby={`range-help-${workspace}`}/><button className="secondary-button compact" onClick={selectRange}>Seleccionar</button><small id={`range-help-${workspace}`}>El final no se incluye</small>{rangeMessage&&<em>{rangeMessage}</em>}</div>
-        <label className="select-wrap bulk-owner"><Users size={14}/><select value={bulkOwner} onChange={(e)=>setBulkOwner(e.target.value)}>{responsibleOwners.map((o)=><option key={o}>{o}</option>)}</select><ChevronDown size={14}/></label>
-        <button className="primary-button compact" disabled={!selected.length} onClick={()=>void updateLeadOwner(selected,bulkOwner)}>Asignar responsable</button>
-        <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={()=>void copyText(phoneLines,`Copiados ${selectedWithPhone.length} números de WhatsApp`)}><Copy size={14}/> Copiar WhatsApp</button>
-        <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={downloadWhatsApp}><Download size={14}/> TXT</button>
-        <button className="text-button clear-selection" disabled={!selected.length} onClick={()=>setSelected([])}>Limpiar</button>
-        {copyMessage&&<em>{copyMessage}</em>}
-      </div>
       <div className="table-scroll">
         <table>
           <thead><tr><th className="select-col"><input type="checkbox" aria-label="Seleccionar visibles" checked={allVisibleSelected} onChange={selectVisible}/></th><th className="number-col">#</th><th>Negocio</th><th>Contacto</th><th>Rubro</th><th>Responsable</th><th>Estado</th><th>Próximo paso</th><th>Última actividad</th><th>Acciones</th></tr></thead>
@@ -322,6 +326,7 @@ function Contacts({ leads, workspace, moveLead, updateLead, updateLeadOwner, del
       {!filtered.length&&<div className="empty-state"><Search/><h3>{hasActiveFilters?"No hay coincidencias":"No encontramos prospectos"}</h3><p>{hasActiveFilters?`La base tiene ${leads.length} prospectos. Limpiá la búsqueda o los filtros para volver a verlos.`:"Probá cargando un prospecto nuevo."}</p>{hasActiveFilters&&<button className="secondary-button" onClick={clearFilters}>Limpiar búsqueda y filtros</button>}</div>}
     </section>
     {editingLead&&<EditLead lead={editingLead} simple={obra} close={()=>setEditingLead(null)} saved={async (changes)=>{await updateLead(editingLead.id,changes);setEditingLead(null);}}/>}
+    </div>
   </div>;
 }
 

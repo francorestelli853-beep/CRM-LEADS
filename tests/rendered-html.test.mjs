@@ -73,8 +73,8 @@ test("Sincro Obra has copyable proposal and follow-up flows", async () => {
   assert.match(app, /Sincro Obra · Cierre sin respuesta/);
   assert.match(app, /copyBlock\(blockId,text\)/);
   assert.match(app, /navigator\.clipboard\.writeText\(text\)/);
-  assert.match(app, /slice\(start-1,end-1\)/);
-  assert.match(app, /El final no se incluye/);
+  assert.match(app, /slice\(start-1,end\)/);
+  assert.match(app, /Incluye el número final/);
 });
 
 test("prospects can be filtered by status and segment together", async () => {
@@ -121,4 +121,15 @@ test("Sincro Obra resets stale table filters and explains empty results", async 
   assert.match(app, /La base tiene \$\{leads\.length\} prospectos/);
   assert.match(app, /Limpiar búsqueda y filtros/);
   assert.match(app, /setSearch\(""\);setStatus\("Todos"\);setSegmentFilter\("__all__"\)/);
+});
+
+test("prospect controls replace the top bar and remain sticky", async () => {
+  const [app, css] = await Promise.all([
+    readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(app, /page !== "contactos" && page !== "sincro-obra"/);
+  assert.match(app, /className="contacts-sticky-bar"/);
+  assert.match(app, /openMenu=\{\(\) => setMenuOpen\(true\)\}/);
+  assert.match(css, /\.contacts-sticky-bar\{position:sticky;top:0;z-index:25/);
 });
