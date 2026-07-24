@@ -93,3 +93,14 @@ test("prospects expose an inline persistent next step", async () => {
   assert.match(route, /next_follow_up: input\.nextFollowUp === undefined/);
   assert.match(route, /String\(input\.nextFollowUp \?\? ""\)\.trim\(\) \|\| null/);
 });
+
+test("prospect search matches partial phone numbers regardless of formatting", async () => {
+  const app = await readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8");
+  assert.match(app, /function matchesLeadSearch\(lead: Lead, query: string\)/);
+  assert.match(app, /const queryDigits = query\.replace\(\/\\D\/g, ""\)/);
+  assert.match(app, /const phoneDigits = lead\.phone\.replace\(\/\\D\/g, ""\)/);
+  assert.match(app, /phoneDigits\.includes\(queryDigits\)/);
+  assert.match(app, /searchValue=\{contactSearch\} onSearchChange=\{setContactSearch\}/);
+  assert.match(app, /value=\{contactSearch\} onChange=\{\(e\)=>setContactSearch\(e\.target\.value\)\}/);
+  assert.doesNotMatch(app, /sessionStorage\.setItem\("crm-search"/);
+});

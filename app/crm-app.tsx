@@ -31,6 +31,15 @@ function normalizedStatus(value: string | null | undefined) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+function matchesLeadSearch(lead: Lead, query: string) {
+  const normalizedQuery = normalizedStatus(query).trim();
+  if (!normalizedQuery) return true;
+  const searchableText = normalizedStatus(`${lead.businessName} ${lead.email} ${lead.segment} ${lead.owner} ${lead.status}`);
+  const queryDigits = query.replace(/\D/g, "");
+  const phoneDigits = lead.phone.replace(/\D/g, "");
+  return searchableText.includes(normalizedQuery) || Boolean(queryDigits && phoneDigits.includes(queryDigits));
+}
+
 function isStatus(value: string | null | undefined, status: string) {
   return normalizedStatus(value) === normalizedStatus(status);
 }
@@ -57,6 +66,7 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
   const [addWorkspace, setAddWorkspace] = useState<Workspace | null>(null);
   const [period, setPeriod] = useState<"hoy" | "semana" | "mes">("semana");
   const [metricNow] = useState(() => Date.now());
+  const [contactSearch, setContactSearch] = useState("");
 
   async function refresh() {
     try {
@@ -157,12 +167,12 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
       </aside>
 
       <main className="main-area">
-        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={20}/></button><div className="global-search"><Search size={18}/><input aria-label="Buscar en el CRM" placeholder="Buscar prospecto, email o teléfono..." onKeyDown={(e) => { if (e.key === "Enter") { setPage("contactos"); sessionStorage.setItem("crm-search", e.currentTarget.value); } }}/><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-button notification" aria-label="Notificaciones"><Clock3 size={18}/><span/></button><button className="primary-button" onClick={() => setAddWorkspace(page === "sincro-obra" ? "obra" : "crm")}><Plus size={18}/> Nuevo prospecto</button></div></header>
+        <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menú"><Menu size={20}/></button><div className="global-search"><Search size={18}/><input aria-label="Buscar en el CRM" placeholder="Buscar prospecto, email o teléfono..." value={contactSearch} onChange={(e)=>setContactSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") setPage("contactos"); }}/><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-button notification" aria-label="Notificaciones"><Clock3 size={18}/><span/></button><button className="primary-button" onClick={() => setAddWorkspace(page === "sincro-obra" ? "obra" : "crm")}><Plus size={18}/> Nuevo prospecto</button></div></header>
         {error && <div className="error-banner"><span>{error}</span><button onClick={() => { setError(""); void refresh(); }}>Reintentar</button></div>}
         {loading ? <Loading/> : <>
           {page === "resumen" && <Dashboard leads={crmLeads} events={crmEvents} now={metricNow} period={period} setPeriod={setPeriod} setPage={setPage}/>}
           {page === "pipeline" && <Pipeline leads={crmLeads} moveLead={moveLead}/>}
-          {page === "contactos" && <Contacts leads={crmLeads} workspace="crm" moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("crm")}/>}
+          {page === "contactos" && <Contacts leads={crmLeads} workspace="crm" searchValue={contactSearch} onSearchChange={setContactSearch} moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("crm")}/>}
           {page === "sincro-obra" && <Contacts leads={obraLeads} workspace="obra" moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("obra")} onImport={() => { sessionStorage.setItem("crm-import-workspace", "obra"); setPage("importar"); }}/>}
           {page === "importar" && <Importer api={api} refresh={refresh}/>} 
           {page === "mensajes" && <Messages templates={data.templates} api={api} refresh={refresh}/>} 
@@ -238,12 +248,13 @@ function Pipeline({ leads, moveLead }: { leads: Lead[]; moveLead: (id:string,sta
   return <div className="page-content wide"><div className="page-heading"><div><p className="eyebrow">Flujo comercial</p><h1>Pipeline</h1><p>Mové cada oportunidad a medida que avanza.</p></div><label className="select-wrap"><Filter size={15}/><select value={filter} onChange={(e)=>setFilter(e.target.value)}>{owners.map((o)=><option key={o}>{o}</option>)}</select><ChevronDown size={14}/></label></div><div className="pipeline-board">{pipelineStages.map((stage) => { const stageLeads = visible.filter((l) => l.status === stage); return <section className="pipeline-column" key={stage} onDragOver={(e)=>e.preventDefault()} onDrop={()=>{ if(dragging) void moveLead(dragging,stage); setDragging(null); }}><header><div><span className="stage-dot" style={{background:stageMeta[stage].color}}/><strong>{stage}</strong></div><em>{stageLeads.length}</em></header><div className="pipeline-cards">{stageLeads.map((lead)=><article className="lead-card" draggable onDragStart={()=>setDragging(lead.id)} onDragEnd={()=>setDragging(null)} key={lead.id}><div className="lead-card-top"><span className={`priority ${lead.priority.toLowerCase()}`}>{lead.priority}</span><MoreHorizontal size={16}/></div><h3>{lead.businessName}</h3><p>{lead.segment}</p><div className="lead-contact">{lead.email ? <Mail size={14}/> : <Phone size={14}/>}<span>{lead.email || formatPhone(lead.phone)}</span></div><footer><div className="avatar tiny">{initials(lead.owner)}</div><span>{lead.owner}</span><small>{relativeTime(lead.updatedAt)}</small></footer><select aria-label={`Estado de ${lead.businessName}`} value={lead.status} onChange={(e)=>void moveLead(lead.id,e.target.value)}>{stages.map((s)=><option key={s}>{s}</option>)}</select></article>)}</div></section>; })}</div></div>;
 }
 
-function Contacts({ leads, workspace, moveLead, updateLead, updateLeadOwner, deleteLead, onAdd, onImport }: { leads: Lead[]; workspace:Workspace; moveLead:(id:string,status:string)=>void; updateLead:(id:string,lead:Partial<Lead>)=>Promise<void>; updateLeadOwner:(ids:string[],owner:string)=>void; deleteLead:(id:string)=>void; onAdd:()=>void; onImport?:()=>void }) {
-  const [search, setSearch] = useState(""); const [status, setStatus] = useState("Todos"); const [segmentFilter, setSegmentFilter] = useState("__all__"); const [selected, setSelected] = useState<string[]>([]); const [bulkOwner, setBulkOwner] = useState(responsibleOwners[0]); const [copyMessage, setCopyMessage] = useState(""); const [range, setRange] = useState(""); const [rangeMessage, setRangeMessage] = useState(""); const [editingLead, setEditingLead] = useState<Lead | null>(null);
-  useEffect(()=>{const timeout=window.setTimeout(()=>{const q=sessionStorage.getItem("crm-search");if(q){setSearch(q);sessionStorage.removeItem("crm-search");}},0);return()=>window.clearTimeout(timeout);},[]);
+function Contacts({ leads, workspace, searchValue, onSearchChange, moveLead, updateLead, updateLeadOwner, deleteLead, onAdd, onImport }: { leads: Lead[]; workspace:Workspace; searchValue?:string; onSearchChange?:(value:string)=>void; moveLead:(id:string,status:string)=>void; updateLead:(id:string,lead:Partial<Lead>)=>Promise<void>; updateLeadOwner:(ids:string[],owner:string)=>void; deleteLead:(id:string)=>void; onAdd:()=>void; onImport?:()=>void }) {
+  const [localSearch, setLocalSearch] = useState(""); const [status, setStatus] = useState("Todos"); const [segmentFilter, setSegmentFilter] = useState("__all__"); const [selected, setSelected] = useState<string[]>([]); const [bulkOwner, setBulkOwner] = useState(responsibleOwners[0]); const [copyMessage, setCopyMessage] = useState(""); const [range, setRange] = useState(""); const [rangeMessage, setRangeMessage] = useState(""); const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const search=searchValue??localSearch;
+  const changeSearch=onSearchChange??setLocalSearch;
   const segments = useMemo(() => { const unique = new Map<string,string>(); leads.forEach((lead) => { const label=lead.segment.trim(); if(label&&!unique.has(normalizedStatus(label))) unique.set(normalizedStatus(label),label); }); return [...unique.values()].sort((a,b)=>a.localeCompare(b,"es",{sensitivity:"base"})); }, [leads]);
   const hasUncategorized = leads.some((lead)=>!lead.segment.trim());
-  const filtered = leads.filter((l) => (status === "Todos" || l.status === status) && (segmentFilter === "__all__" || (segmentFilter === "__empty__" ? !l.segment.trim() : normalizedStatus(l.segment) === normalizedStatus(segmentFilter))) && `${l.businessName} ${l.email} ${l.phone} ${l.segment}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = leads.filter((l) => (status === "Todos" || l.status === status) && (segmentFilter === "__all__" || (segmentFilter === "__empty__" ? !l.segment.trim() : normalizedStatus(l.segment) === normalizedStatus(segmentFilter))) && matchesLeadSearch(l,search));
   const selectedLeads = filtered.filter((l)=>selected.includes(l.id));
   const selectedWithPhone = selectedLeads.filter((l)=>whatsappNumber(l.phone));
   const allVisibleSelected = filtered.length > 0 && filtered.every((l)=>selected.includes(l.id));
@@ -277,7 +288,7 @@ function Contacts({ leads, workspace, moveLead, updateLead, updateLeadOwner, del
     </div>
     <section className="panel contacts-panel">
       <div className="table-toolbar">
-        <label className="table-search"><Search size={17}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label>
+        <label className="table-search"><Search size={17}/><input value={search} onChange={(e)=>changeSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label>
         <label className="select-wrap"><Filter size={15}/><select aria-label="Filtrar por estado" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="Todos">Todos los estados</option>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label>
         <label className="select-wrap"><BriefcaseBusiness size={15}/><select aria-label="Filtrar por rubro" value={segmentFilter} onChange={(e)=>setSegmentFilter(e.target.value)}><option value="__all__">Todos los rubros</option>{hasUncategorized&&<option value="__empty__">Sin rubro</option>}{segments.map((segment)=><option key={segment} value={segment}>{segment}</option>)}</select><ChevronDown size={14}/></label>
         <button className="secondary-button" onClick={()=>downloadCsv(filtered,workspace)}><Download size={16}/> Exportar CSV</button>
