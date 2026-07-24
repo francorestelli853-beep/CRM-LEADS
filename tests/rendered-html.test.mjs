@@ -96,8 +96,10 @@ test("prospects expose an inline persistent next step", async () => {
   assert.match(app, /<NextStepCell key=.* lead=\{lead\} save=\{updateLead\}\/>/);
   assert.match(app, /nextFollowUp:next/);
   assert.match(app, /Enter o salir para guardar/);
-  assert.match(route, /next_follow_up: input\.nextFollowUp === undefined/);
-  assert.match(route, /String\(input\.nextFollowUp \?\? ""\)\.trim\(\) \|\| null/);
+  assert.match(route, /SINCRO_NEXT_STEP/);
+  assert.match(route, /composeLeadNotes\(notes, nextStep\)/);
+  assert.match(route, /next_follow_up: null/);
+  assert.match(route, /nextFollowUp: content\.nextStep/);
 });
 
 test("prospect search matches partial phone numbers regardless of formatting", async () => {
@@ -106,8 +108,9 @@ test("prospect search matches partial phone numbers regardless of formatting", a
   assert.match(app, /const queryDigits = query\.replace\(\/\\D\/g, ""\)/);
   assert.match(app, /const phoneDigits = lead\.phone\.replace\(\/\\D\/g, ""\)/);
   assert.match(app, /phoneDigits\.includes\(queryDigits\)/);
-  assert.match(app, /searchValue=\{contactSearch\} onSearchChange=\{setContactSearch\}/);
-  assert.match(app, /value=\{contactSearch\} onChange=\{\(e\)=>setContactSearch\(e\.target\.value\)\}/);
+  assert.match(app, /aria-label="Buscar negocio, email o teléfono"/);
+  assert.match(app, /value=\{search\} onChange=\{\(e\)=>setSearch\(e\.target\.value\)\}/);
+  assert.doesNotMatch(app, /className="global-search"|⌘ K|contactSearch/);
   assert.doesNotMatch(app, /sessionStorage\.setItem\("crm-search"/);
 });
 
@@ -117,5 +120,5 @@ test("Sincro Obra resets stale table filters and explains empty results", async 
   assert.match(app, /<Contacts key="obra-prospects"/);
   assert.match(app, /La base tiene \$\{leads\.length\} prospectos/);
   assert.match(app, /Limpiar búsqueda y filtros/);
-  assert.match(app, /changeSearch\(""\);setStatus\("Todos"\);setSegmentFilter\("__all__"\)/);
+  assert.match(app, /setSearch\(""\);setStatus\("Todos"\);setSegmentFilter\("__all__"\)/);
 });

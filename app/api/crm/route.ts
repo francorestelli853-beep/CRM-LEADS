@@ -85,6 +85,34 @@ type CrmPayload = {
 };
 
 const responsibleOwners = ["Franco", "Trezza", "Laucha"];
+const nextStepMarker = /(?:\r?\n)?\[\[SINCRO_NEXT_STEP:([^\]]*)\]\]\s*$/;
+
+function splitLeadNotes(storedNotes: unknown, legacyNextFollowUp: unknown = null) {
+  const stored = String(storedNotes ?? "");
+  const match = stored.match(nextStepMarker);
+  if (!match) {
+    const legacy = String(legacyNextFollowUp ?? "").trim();
+    return { notes: stored.trim(), nextStep: legacy || null };
+  }
+  let decoded = "";
+  try {
+    decoded = decodeURIComponent(match[1]);
+  } catch {
+    decoded = match[1];
+  }
+  return {
+    notes: stored.replace(nextStepMarker, "").trim(),
+    nextStep: decoded.trim() || null,
+  };
+}
+
+function composeLeadNotes(notes: unknown, nextStep: unknown) {
+  const visibleNotes = splitLeadNotes(notes).notes;
+  const cleanNextStep = String(nextStep ?? "").trim();
+  if (!cleanNextStep) return visibleNotes;
+  const marker = `[[SINCRO_NEXT_STEP:${encodeURIComponent(cleanNextStep)}]]`;
+  return visibleNotes ? `${visibleNotes}\n${marker}` : marker;
+}
 
 function env(name: string) {
   return process.env[name]?.trim() ?? "";
@@ -173,6 +201,7 @@ function actorFrom(request: Request) {
 }
 
 function fromLead(row: DbLead) {
+  const content = splitLeadNotes(row.notes, row.next_follow_up);
   return {
     id: row.id,
     businessName: row.business_name,
@@ -183,8 +212,8 @@ function fromLead(row: DbLead) {
     status: row.status,
     priority: row.priority,
     batch: row.batch,
-    notes: row.notes,
-    nextFollowUp: row.next_follow_up,
+    notes: content.notes,
+    nextFollowUp: content.nextStep,
     source: row.source,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -231,8 +260,8 @@ function toLead(input: LeadInput, actor: string, source: string, now: string) {
     status: cleanStatus(input.status),
     priority: String(input.priority ?? "Media").trim() || "Media",
     batch: String(input.batch ?? "").trim(),
-    notes: String(input.notes ?? "").trim(),
-    next_follow_up: input.nextFollowUp ? String(input.nextFollowUp) : null,
+    notes: composeLeadNotes(input.notes, input.nextFollowUp),
+    next_follow_up: null,
     source,
     created_at: now,
     updated_at: now,
@@ -364,6 +393,11 @@ export async function POST(request: Request) {
       const phone = String(input.phone ?? current.phone).replace(/\D/g, "");
       if (!businessName || (!email && !phone)) return Response.json({ error: "Ingresa el negocio y al menos un email o telefono." }, { status: 400 });
       const status = cleanStatus(input.status ?? current.status);
+      const currentContent = splitLeadNotes(current.notes, current.next_follow_up);
+      const nextStep = input.nextFollowUp === undefined
+        ? currentContent.nextStep
+        : String(input.nextFollowUp ?? "").trim() || null;
+      const notes = input.notes === undefined ? currentContent.notes : String(input.notes ?? "").trim();
       const updateParams = new URLSearchParams({ id: `eq.${leadId}` });
       const [updated] = await supabase<DbLead[]>(`leads?${updateParams.toString()}`, {
         method: "PATCH",
@@ -377,8 +411,8 @@ export async function POST(request: Request) {
           status,
           priority: String(input.priority ?? current.priority).trim() || "Media",
           batch: String(input.batch ?? current.batch).trim(),
-          notes: String(input.notes ?? current.notes).trim(),
-          next_follow_up: input.nextFollowUp === undefined ? current.next_follow_up : String(input.nextFollowUp ?? "").trim() || null,
+          notes: composeLeadNotes(notes, nextStep),
+          next_follow_up: null,
           updated_at: now,
         }),
       });
