@@ -37,6 +37,8 @@ test("Sincro Obra seed is complete, unique, and omits priority and batch", async
   assert.ok(rows.every((row) => row.length === 6));
   assert.ok(rows.every(([, email, phone]) => email || phone));
   assert.doesNotMatch(source, /\bpriority\b|\bbatch\b|\bprioridad\b|\btanda\b/i);
+  assert.match(source, /segment: "Estudio de arquitectura"/);
+  assert.match(source, /notes: ""/);
 
   const emails = rows.map(([, email]) => email).filter(Boolean);
   const phones = rows.map(([, , phone]) => phone).filter(Boolean);
@@ -56,7 +58,11 @@ test("product data, metrics, import, and messages stay separated", async () => {
   assert.match(app, /<Dashboard leads=\{crmLeads\} events=\{crmEvents\}/);
   assert.match(app, /workspace="obra"/);
   assert.match(app, /Prioridad y Tanda se ignoran/);
+  assert.match(app, /workspace==="obra"\?"Estudio de arquitectura"/);
+  assert.match(app, /workspace==="obra"\?"Franco":ownerValue/);
   assert.match(route, /payload\.action === "seedSincroObra"/);
+  assert.match(route, /resolution=merge-duplicates,return=minimal/);
+  assert.match(route, /next_follow_up: null/);
   assert.match(route, /sourceFor\(payload\.workspace, "Excel"\)/);
 });
 
@@ -103,4 +109,13 @@ test("prospect search matches partial phone numbers regardless of formatting", a
   assert.match(app, /searchValue=\{contactSearch\} onSearchChange=\{setContactSearch\}/);
   assert.match(app, /value=\{contactSearch\} onChange=\{\(e\)=>setContactSearch\(e\.target\.value\)\}/);
   assert.doesNotMatch(app, /sessionStorage\.setItem\("crm-search"/);
+});
+
+test("Sincro Obra resets stale table filters and explains empty results", async () => {
+  const app = await readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8");
+  assert.match(app, /<Contacts key="crm-prospects"/);
+  assert.match(app, /<Contacts key="obra-prospects"/);
+  assert.match(app, /La base tiene \$\{leads\.length\} prospectos/);
+  assert.match(app, /Limpiar búsqueda y filtros/);
+  assert.match(app, /changeSearch\(""\);setStatus\("Todos"\);setSegmentFilter\("__all__"\)/);
 });

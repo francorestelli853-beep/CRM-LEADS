@@ -172,8 +172,8 @@ export default function CrmApp({ currentUser }: { currentUser: string }) {
         {loading ? <Loading/> : <>
           {page === "resumen" && <Dashboard leads={crmLeads} events={crmEvents} now={metricNow} period={period} setPeriod={setPeriod} setPage={setPage}/>}
           {page === "pipeline" && <Pipeline leads={crmLeads} moveLead={moveLead}/>}
-          {page === "contactos" && <Contacts leads={crmLeads} workspace="crm" searchValue={contactSearch} onSearchChange={setContactSearch} moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("crm")}/>}
-          {page === "sincro-obra" && <Contacts leads={obraLeads} workspace="obra" moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("obra")} onImport={() => { sessionStorage.setItem("crm-import-workspace", "obra"); setPage("importar"); }}/>}
+          {page === "contactos" && <Contacts key="crm-prospects" leads={crmLeads} workspace="crm" searchValue={contactSearch} onSearchChange={setContactSearch} moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("crm")}/>}
+          {page === "sincro-obra" && <Contacts key="obra-prospects" leads={obraLeads} workspace="obra" moveLead={moveLead} updateLead={updateLead} updateLeadOwner={updateLeadOwner} deleteLead={deleteLead} onAdd={() => setAddWorkspace("obra")} onImport={() => { sessionStorage.setItem("crm-import-workspace", "obra"); setPage("importar"); }}/>}
           {page === "importar" && <Importer api={api} refresh={refresh}/>} 
           {page === "mensajes" && <Messages templates={data.templates} api={api} refresh={refresh}/>} 
         </>}
@@ -254,6 +254,8 @@ function Contacts({ leads, workspace, searchValue, onSearchChange, moveLead, upd
   const changeSearch=onSearchChange??setLocalSearch;
   const segments = useMemo(() => { const unique = new Map<string,string>(); leads.forEach((lead) => { const label=lead.segment.trim(); if(label&&!unique.has(normalizedStatus(label))) unique.set(normalizedStatus(label),label); }); return [...unique.values()].sort((a,b)=>a.localeCompare(b,"es",{sensitivity:"base"})); }, [leads]);
   const hasUncategorized = leads.some((lead)=>!lead.segment.trim());
+  const hasActiveFilters=Boolean(search.trim())||status!=="Todos"||segmentFilter!=="__all__";
+  const clearFilters=()=>{changeSearch("");setStatus("Todos");setSegmentFilter("__all__");};
   const filtered = leads.filter((l) => (status === "Todos" || l.status === status) && (segmentFilter === "__all__" || (segmentFilter === "__empty__" ? !l.segment.trim() : normalizedStatus(l.segment) === normalizedStatus(segmentFilter))) && matchesLeadSearch(l,search));
   const selectedLeads = filtered.filter((l)=>selected.includes(l.id));
   const selectedWithPhone = selectedLeads.filter((l)=>whatsappNumber(l.phone));
@@ -320,7 +322,7 @@ function Contacts({ leads, workspace, searchValue, onSearchChange, moveLead, upd
           </tr>)}</tbody>
         </table>
       </div>
-      {!filtered.length&&<div className="empty-state"><Search/><h3>No encontramos prospectos</h3><p>Probá cambiando los filtros o cargá uno nuevo.</p></div>}
+      {!filtered.length&&<div className="empty-state"><Search/><h3>{hasActiveFilters?"No hay coincidencias":"No encontramos prospectos"}</h3><p>{hasActiveFilters?`La base tiene ${leads.length} prospectos. Limpiá la búsqueda o los filtros para volver a verlos.`:"Probá cargando un prospecto nuevo."}</p>{hasActiveFilters&&<button className="secondary-button" onClick={clearFilters}>Limpiar búsqueda y filtros</button>}</div>}
     </section>
     {editingLead&&<EditLead lead={editingLead} simple={obra} close={()=>setEditingLead(null)} saved={async (changes)=>{await updateLead(editingLead.id,changes);setEditingLead(null);}}/>}
   </div>;
@@ -379,7 +381,7 @@ function Importer({ api, refresh }: { api:(p:Record<string,unknown>)=>Promise<Ap
         const contactName=val(row,indexes.contactName);
         const channel=val(row,indexes.channel);
         const notes=[studio&&contactName?`Contacto: ${contactName}`:"",channel?`Canal recomendado: ${channel}`:"",val(row,indexes.notes)].filter(Boolean).join(" · ");
-        return {businessName:studio||contactName||(email?email.split("@")[0]:""),email,phone:val(row,indexes.phone),segment:val(row,indexes.segment)||"General",owner:ownerValue(val(row,indexes.owner)),status:val(row,indexes.status)||"Pendiente",priority:workspace==="obra"?"Media":val(row,indexes.priority)||"Media",batch:workspace==="obra"?"":val(row,indexes.batch),notes};
+        return {businessName:studio||contactName||(email?email.split("@")[0]:""),email,phone:val(row,indexes.phone),segment:workspace==="obra"?"Estudio de arquitectura":val(row,indexes.segment)||"General",owner:workspace==="obra"?"Franco":ownerValue(val(row,indexes.owner)),status:val(row,indexes.status)||"Pendiente",priority:workspace==="obra"?"Media":val(row,indexes.priority)||"Media",batch:workspace==="obra"?"":val(row,indexes.batch),notes:workspace==="obra"?"":notes,nextFollowUp:""};
       });
       const usable=parsed.filter((r)=>r.businessName&&(r.email||r.phone));
       const incomplete=parsed.filter((r)=>r.businessName||r.email||r.phone).length-usable.length;

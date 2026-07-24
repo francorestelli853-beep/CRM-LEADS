@@ -131,13 +131,13 @@ const rows = [
 ] as const;
 
 export const sincroObraSeeds: SincroObraSeed[] = rows.map(
-  ([businessName, email, phone, segment, status, notes]) => ({
+  ([businessName, email, phone, , status]) => ({
     businessName,
     email,
     phone,
-    segment,
+    segment: "Estudio de arquitectura",
     owner: "Franco",
     status,
-    notes,
+    notes: "",
   }),
 );

@@ -446,20 +446,43 @@ export async function POST(request: Request) {
     }
 
     if (payload.action === "seedSincroObra") {
-      const params = new URLSearchParams({ select: "email,phone", source: `eq.${SINCRO_OBRA_SOURCE}` });
-      const existing = await supabase<Array<{ email: string; phone: string }>>(`leads?${params.toString()}`);
-      const keys = new Set(existing.flatMap((row) => [row.email && `e:${row.email.toLowerCase()}`, row.phone && `p:${row.phone}`]).filter(Boolean));
-      const accepted = [];
-      let skipped = 0;
+      const params = new URLSearchParams({ select: "*", source: `eq.${SINCRO_OBRA_SOURCE}` });
+      const existing = await supabase<DbLead[]>(`leads?${params.toString()}`);
+      const byKey = new Map<string, DbLead>();
+      existing.forEach((row) => {
+        if (row.email) byKey.set(`e:${row.email.toLowerCase()}`, row);
+        if (row.phone) byKey.set(`p:${row.phone}`, row);
+      });
+      const accepted: DbLead[] = [];
+      const updated: DbLead[] = [];
+      const processedIds = new Set<string>();
       for (const item of sincroObraSeeds) {
         const lead = toLead(item, "Franco", SINCRO_OBRA_SOURCE, now);
-        if (!lead || (lead.email && keys.has(`e:${lead.email}`)) || (lead.phone && keys.has(`p:${lead.phone}`))) {
-          skipped++;
+        if (!lead) continue;
+        const current = (lead.email && byKey.get(`e:${lead.email}`)) || (lead.phone && byKey.get(`p:${lead.phone}`));
+        if (current && !processedIds.has(current.id)) {
+          processedIds.add(current.id);
+          updated.push({
+            ...current,
+            business_name: lead.business_name,
+            email: lead.email,
+            phone: lead.phone,
+            segment: lead.segment,
+            owner: "Franco",
+            status: lead.status,
+            next_follow_up: null,
+            updated_at: now,
+          });
           continue;
         }
-        if (lead.email) keys.add(`e:${lead.email}`);
-        if (lead.phone) keys.add(`p:${lead.phone}`);
         accepted.push(lead);
+      }
+      if (updated.length) {
+        await supabase("leads?on_conflict=id", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify(updated),
+        });
       }
       if (accepted.length) {
         await supabase("leads", {
@@ -473,7 +496,7 @@ export async function POST(request: Request) {
           body: JSON.stringify(accepted.map((lead) => ({ id: id("evt"), lead_id: lead.id, type: "created", from_status: null, to_status: lead.status, actor: "Franco", note: "Base inicial de Sincro Obra", created_at: now }))),
         });
       }
-      return Response.json({ added: accepted.length, skipped, total: sincroObraSeeds.length });
+      return Response.json({ added: accepted.length, updated: updated.length, skipped: sincroObraSeeds.length - accepted.length - updated.length, total: sincroObraSeeds.length });
     }
 
     if (payload.action === "saveTemplate") {
