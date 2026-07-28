@@ -256,6 +256,7 @@ function Contacts({ leads, workspace, openMenu, moveLead, updateLead, updateLead
   const filtered = leads.filter((l) => (status === "Todos" || l.status === status) && (segmentFilter === "__all__" || (segmentFilter === "__empty__" ? !l.segment.trim() : normalizedStatus(l.segment) === normalizedStatus(segmentFilter))) && matchesLeadSearch(l,search));
   const selectedLeads = filtered.filter((l)=>selected.includes(l.id));
   const selectedWithPhone = selectedLeads.filter((l)=>whatsappNumber(l.phone));
+  const selectedWithEmail = selectedLeads.filter((l)=>l.email.trim());
   const allVisibleSelected = filtered.length > 0 && filtered.every((l)=>selected.includes(l.id));
   const toggle = (leadId:string) => setSelected((ids)=>ids.includes(leadId)?ids.filter((id)=>id!==leadId):[...ids,leadId]);
   const selectVisible = () => setSelected((ids)=>allVisibleSelected?ids.filter((id)=>!filtered.some((l)=>l.id===id)):[...new Set([...ids,...filtered.map((l)=>l.id)])]);
@@ -269,8 +270,9 @@ function Contacts({ leads, workspace, openMenu, moveLead, updateLead, updateLead
     setSelected(rangeIds);
     setRangeMessage(`${rangeIds.length} seleccionados · ${start}-${Math.min(end,filtered.length)}`);
   }
-  async function copyText(text:string, message:string){ if(!text){setCopyMessage("No hay teléfonos seleccionados.");return;} try{ await navigator.clipboard.writeText(text); setCopyMessage(message); } catch { const area=document.createElement("textarea"); area.value=text; document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove(); setCopyMessage(message); } window.setTimeout(()=>setCopyMessage(""),2600); }
+  async function copyText(text:string, message:string, emptyMessage="No hay datos seleccionados."){ if(!text){setCopyMessage(emptyMessage);return;} try{ await navigator.clipboard.writeText(text); setCopyMessage(message); } catch { const area=document.createElement("textarea"); area.value=text; document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove(); setCopyMessage(message); } window.setTimeout(()=>setCopyMessage(""),2600); }
   const phoneLines = selectedWithPhone.map((l)=>whatsappNumber(l.phone)).join("\n");
+  const emailLines = selectedWithEmail.map((l)=>l.email.trim()).join("\n");
   const downloadWhatsApp = () => downloadText("whatsapp_seleccionados_sincro.txt",phoneLines);
   const obra = workspace === "obra";
   return <div className="contacts-view">
@@ -283,11 +285,12 @@ function Contacts({ leads, workspace, openMenu, moveLead, updateLead, updateLead
         <button className="secondary-button export-button" onClick={()=>downloadCsv(filtered,workspace)}><Download size={16}/> Exportar CSV</button>
       </div>
       <div className="bulk-toolbar">
-        <div><strong>{selected.length ? `${selected.length} seleccionados` : "Seleccioná prospectos para trabajar en lote"}</strong><small>{selectedWithPhone.length} con teléfono listo para WhatsApp</small></div>
+        <div><strong>{selected.length ? `${selected.length} seleccionados` : "Seleccioná prospectos para trabajar en lote"}</strong><small>{selectedWithPhone.length} con teléfono · {selectedWithEmail.length} con email</small></div>
         <div className="range-selector"><label htmlFor={`contact-range-${workspace}`}>Rango</label><input id={`contact-range-${workspace}`} value={range} onChange={(e)=>{setRange(e.target.value);setRangeMessage("");}} onKeyDown={(e)=>{if(e.key==="Enter")selectRange();}} placeholder="20-50" aria-describedby={`range-help-${workspace}`}/><button className="secondary-button compact" onClick={selectRange}>Seleccionar</button><small id={`range-help-${workspace}`}>Incluye el número final</small>{rangeMessage&&<em>{rangeMessage}</em>}</div>
         <label className="select-wrap bulk-owner"><Users size={14}/><select value={bulkOwner} onChange={(e)=>setBulkOwner(e.target.value)}>{responsibleOwners.map((o)=><option key={o}>{o}</option>)}</select><ChevronDown size={14}/></label>
         <button className="primary-button compact" disabled={!selected.length} onClick={()=>void updateLeadOwner(selected,bulkOwner)}>Asignar responsable</button>
-        <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={()=>void copyText(phoneLines,`Copiados ${selectedWithPhone.length} números de WhatsApp`)}><Copy size={14}/> Copiar WhatsApp</button>
+        <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={()=>void copyText(phoneLines,`Copiados ${selectedWithPhone.length} números de WhatsApp`,"No hay teléfonos seleccionados.")}><Copy size={14}/> Copiar WhatsApp</button>
+        <button className="secondary-button compact" disabled={!selectedWithEmail.length} onClick={()=>void copyText(emailLines,`Copiados ${selectedWithEmail.length} emails`,"No hay emails seleccionados.")}><Mail size={14}/> Copiar emails</button>
         <button className="secondary-button compact" disabled={!selectedWithPhone.length} onClick={downloadWhatsApp}><Download size={14}/> TXT</button>
         <button className="text-button clear-selection" disabled={!selected.length} onClick={()=>setSelected([])}>Limpiar</button>
         {copyMessage&&<em>{copyMessage}</em>}

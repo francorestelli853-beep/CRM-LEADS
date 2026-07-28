@@ -133,3 +133,12 @@ test("prospect controls replace the top bar and remain sticky", async () => {
   assert.match(app, /openMenu=\{\(\) => setMenuOpen\(true\)\}/);
   assert.match(css, /\.contacts-sticky-bar\{position:sticky;top:0;z-index:25/);
 });
+
+test("selected prospects can copy emails separately from WhatsApp numbers", async () => {
+  const app = await readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8");
+  assert.match(app, /const selectedWithEmail = selectedLeads\.filter\(\(l\)=>l\.email\.trim\(\)\)/);
+  assert.match(app, /const emailLines = selectedWithEmail\.map\(\(l\)=>l\.email\.trim\(\)\)\.join\("\\n"\)/);
+  assert.match(app, /> Copiar emails<\/button>/);
+  assert.match(app, /Copiados \$\{selectedWithEmail\.length\} emails/);
+  assert.match(app, /No hay emails seleccionados\./);
+});
