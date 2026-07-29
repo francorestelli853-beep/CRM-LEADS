@@ -36,8 +36,10 @@ function matchesLeadSearch(lead: Lead, query: string) {
   if (!normalizedQuery) return true;
   const searchableText = normalizedStatus(`${lead.businessName} ${lead.email} ${lead.segment} ${lead.owner} ${lead.status}`);
   const queryDigits = query.replace(/\D/g, "");
+  const queryPhoneTokens = query.split(/[^\d]+/).filter((token) => token.length >= 6);
   const phoneDigits = lead.phone.replace(/\D/g, "");
-  return searchableText.includes(normalizedQuery) || Boolean(queryDigits && phoneDigits.includes(queryDigits));
+  const matchesOnePastedPhone = queryPhoneTokens.length > 1 && queryPhoneTokens.some((token) => phoneDigits.includes(token));
+  return searchableText.includes(normalizedQuery) || Boolean(queryDigits && phoneDigits.includes(queryDigits)) || matchesOnePastedPhone;
 }
 
 function isStatus(value: string | null | undefined, status: string) {
@@ -279,7 +281,7 @@ function Contacts({ leads, workspace, openMenu, moveLead, updateLead, updateLead
     <div className="contacts-sticky-bar">
       <div className="table-toolbar">
         <button className="icon-button mobile-menu contacts-menu" onClick={openMenu} aria-label="Abrir menú"><Menu size={20}/></button>
-        <label className="table-search"><Search size={17}/><input aria-label="Buscar negocio, email o teléfono" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono..."/></label>
+        <label className="table-search"><Search size={17}/><input aria-label="Buscar negocio, email o teléfono" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar negocio, email, teléfono o pegá varios números..."/></label>
         <label className="select-wrap"><Filter size={15}/><select aria-label="Filtrar por estado" value={status} onChange={(e)=>setStatus(e.target.value)}><option value="Todos">Todos los estados</option>{stages.map((s)=><option key={s}>{s}</option>)}</select><ChevronDown size={14}/></label>
         <label className="select-wrap"><BriefcaseBusiness size={15}/><select aria-label="Filtrar por rubro" value={segmentFilter} onChange={(e)=>setSegmentFilter(e.target.value)}><option value="__all__">Todos los rubros</option>{hasUncategorized&&<option value="__empty__">Sin rubro</option>}{segments.map((segment)=><option key={segment} value={segment}>{segment}</option>)}</select><ChevronDown size={14}/></label>
         <button className="secondary-button export-button" onClick={()=>downloadCsv(filtered,workspace)}><Download size={16}/> Exportar CSV</button>

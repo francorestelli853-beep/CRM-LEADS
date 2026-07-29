@@ -106,8 +106,10 @@ test("prospect search matches partial phone numbers regardless of formatting", a
   const app = await readFile(new URL("../app/crm-app.tsx", import.meta.url), "utf8");
   assert.match(app, /function matchesLeadSearch\(lead: Lead, query: string\)/);
   assert.match(app, /const queryDigits = query\.replace\(\/\\D\/g, ""\)/);
+  assert.match(app, /const queryPhoneTokens = query\.split\(\/\[\^\\d\]\+\/\)\.filter\(\(token\) => token\.length >= 6\)/);
   assert.match(app, /const phoneDigits = lead\.phone\.replace\(\/\\D\/g, ""\)/);
   assert.match(app, /phoneDigits\.includes\(queryDigits\)/);
+  assert.match(app, /queryPhoneTokens\.some\(\(token\) => phoneDigits\.includes\(token\)\)/);
   assert.match(app, /aria-label="Buscar negocio, email o teléfono"/);
   assert.match(app, /value=\{search\} onChange=\{\(e\)=>setSearch\(e\.target\.value\)\}/);
   assert.doesNotMatch(app, /className="global-search"|⌘ K|contactSearch/);
